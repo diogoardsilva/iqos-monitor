@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
 
 from . import storage, theme, updater
 from .ble import IqosConnection, SimulatedConnection, scan
+from .popup import HolderPopup
 from .theme import BatteryRing, font
 from .tracker import Alert, DeviceState, Settings
 from .version import __version__
@@ -253,9 +254,12 @@ class SettingsDialog(QDialog):
         self.notify.setChecked(s.notify_stick_end)
         self.auto = QCheckBox("Instalar atualizações automaticamente")
         self.auto.setChecked(s.auto_update)
+        self.popup = QCheckBox("Mostrar janela no canto ao tirar o holder")
+        self.popup.setChecked(s.show_popup)
         form.addRow("Avisar bateria fraca abaixo de", self.low)
         form.addRow("Ler o contador a cada", self.poll)
         form.addRow(self.notify)
+        form.addRow(self.popup)
         form.addRow(self.auto)
         form.addRow(secondary(f"IQOS Monitor {__version__}"))
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
@@ -334,6 +338,7 @@ class MainWindow(QMainWindow):
         root_l.addWidget(scroll)
         self.setCentralWidget(root)
 
+        self.popup = HolderPopup()
         self.tray = QSystemTrayIcon(make_icon(), self)
         menu = QMenu()
         menu.addAction("Abrir", self.show_normal)
@@ -445,6 +450,7 @@ class MainWindow(QMainWindow):
             self.settings.poll_seconds = dlg.poll.value()
             self.settings.notify_stick_end = dlg.notify.isChecked()
             self.settings.auto_update = dlg.auto.isChecked()
+            self.settings.show_popup = dlg.popup.isChecked()
             for c in self.conns.values():
                 c.poll_seconds = self.settings.poll_seconds
             self.schedule_save()
@@ -458,11 +464,18 @@ class MainWindow(QMainWindow):
         self._handle(d, d.on_telemetry(t, datetime.now(), self.settings.low_battery_pct))
 
     def _on_status(self, d: DeviceState, connected: bool, text: str) -> None:
+        # Nos ONE não há holder: o IQOS liga-se quando é ativado, mostra a janela aí.
+        if connected and not d.connected and d.model.one_piece and self.settings.show_popup:
+            QTimer.singleShot(1500, lambda: self.popup.show_for(d, leaving=True))
         d.connected, d.status_text = connected, text
         self.refresh(d)
 
     def _handle(self, d: DeviceState, alerts: list[Alert]) -> None:
         for a in alerts:
+            if a.kind in ("holder_out", "holder_in"):
+                if self.settings.show_popup:
+                    self.popup.show_for(d, leaving=a.kind == "holder_out")
+                continue
             if a.kind == "stick_end" and not self.settings.notify_stick_end:
                 continue
             self.notify(a)

@@ -11,13 +11,17 @@ from .protocol import BatteryStatus, Model, Telemetry
 CHARGING_RISE_PCT = 5
 # Sem telemetria: queda do holder (fora/dentro do carregador) que conta como um stick.
 HOLDER_DROP_PER_STICK_PCT = 25
+# Abaixo disto o holder ainda não chega para um cigarro inteiro.
+HOLDER_READY_PCT = 95
 # Proteção contra leituras estranhas do contador do dispositivo.
 MAX_STICKS_PER_UPDATE = 5
 
 
 @dataclass
 class Alert:
-    kind: str  # "stick_end" | "holder_charge" | "low_battery" | "charged"
+    # "stick_end" | "holder_charge" | "low_battery" | "charged" avisam no Windows;
+    # "holder_out" | "holder_in" só abrem a janela do canto.
+    kind: str
     title: str
     message: str
 
@@ -74,6 +78,11 @@ class DeviceState:
     def charging(self) -> bool:
         return self._charging
 
+    @property
+    def holder_ready(self) -> bool:
+        """O holder tem carga para um cigarro (só sabemos ao sair do carregador)."""
+        return self.holder_pct is not None and self.holder_pct >= HOLDER_READY_PCT
+
     # ---- Estimativas -------------------------------------------------------
 
     @property
@@ -116,8 +125,10 @@ class DeviceState:
                     and self._holder_before_removal - b.holder_pct >= HOLDER_DROP_PER_STICK_PCT):
                 alerts += self._register_sticks(1, now)
             self.holder_sticks_since_charge = 0
+            alerts.append(Alert("holder_in", "Holder no carregador", self.alias))
         if not b.holder_in_charger and prev_in:
             self._holder_before_removal = self.holder_pct
+            alerts.append(Alert("holder_out", "Holder fora do carregador", self.alias))
 
         # Deteção de carregamento do carregador / dispositivo.
         if self._min_pct_since_charge is None or b.charger_pct < self._min_pct_since_charge:
@@ -204,4 +215,5 @@ class Settings:
     poll_seconds: int = 20
     notify_stick_end: bool = True
     auto_update: bool = True
+    show_popup: bool = True
     devices: list[DeviceState] = field(default_factory=list)

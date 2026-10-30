@@ -25,6 +25,7 @@ def load(path: Path | None = None) -> Settings:
         poll_seconds=int(data.get("poll_seconds", 20)),
         notify_stick_end=bool(data.get("notify_stick_end", True)),
         auto_update=bool(data.get("auto_update", True)),
+        show_popup=bool(data.get("show_popup", True)),
     )
     s.devices = [DeviceState.from_dict(d) for d in data.get("devices", []) if "address" in d]
     return s
@@ -38,6 +39,7 @@ def save(s: Settings, path: Path | None = None) -> None:
         "poll_seconds": s.poll_seconds,
         "notify_stick_end": s.notify_stick_end,
         "auto_update": s.auto_update,
+        "show_popup": s.show_popup,
         "devices": [d.to_dict() for d in s.devices],
     }
     tmp = path.with_suffix(".tmp")

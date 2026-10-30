@@ -35,7 +35,7 @@ def test_fallback_count_without_telemetry():
     d.on_battery(BatteryStatus(80, 100, True), NOW, LOW)
     d.on_battery(BatteryStatus(80, None, False), NOW, LOW)
     alerts = d.on_battery(BatteryStatus(76, 10, True), NOW, LOW)
-    assert kinds(alerts) == ["stick_end"]
+    assert kinds(alerts) == ["stick_end", "holder_in"]
     assert d.holder_sticks_since_charge == 0  # voltou ao carregador
 
 
@@ -77,3 +77,12 @@ def test_persistence_roundtrip():
     d = DeviceState("A", "IQOS ILUMA", alias="Casa", sticks_today=3)
     e = DeviceState.from_dict(d.to_dict())
     assert (e.alias, e.sticks_today, e.pct_per_stick) == ("Casa", 3, 5.0)
+
+
+def test_holder_out_and_in_events():
+    d = DeviceState("A", "IQOS ILUMA PRIME")
+    assert kinds(d.on_battery(BatteryStatus(80, 100, True), NOW, LOW)) == []
+    assert kinds(d.on_battery(BatteryStatus(80, None, False), NOW, LOW)) == ["holder_out"]
+    assert d.holder_ready and d.holder_pct == 100  # última leitura antes de sair
+    assert kinds(d.on_battery(BatteryStatus(80, 85, True), NOW, LOW)) == ["holder_in"]
+    assert not d.holder_ready
