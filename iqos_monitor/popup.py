@@ -10,11 +10,11 @@ from PySide6.QtCore import (
     QEasingCurve, QPoint, QPropertyAnimation, QRectF, Qt, QTimer, QVariantAnimation,
 )
 from PySide6.QtGui import (
-    QColor, QFont, QGuiApplication, QLinearGradient, QPainter, QPainterPath, QPen,
+    QColor, QFont, QGuiApplication, QPainter, QPen, QRadialGradient,
 )
 from PySide6.QtWidgets import QWidget
 
-from . import theme
+from . import art, theme
 from .theme import battery_color, font
 from .tracker import DeviceState
 
@@ -28,7 +28,7 @@ class HolderPopup(QWidget):
                          | Qt.WindowDoesNotAcceptFocus)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setAttribute(Qt.WA_ShowWithoutActivating)
-        self.setFixedSize(360, 176)
+        self.setFixedSize(380, 200)
         self.dev: DeviceState | None = None
         self.leaving = True  # True: holder a sair; False: a entrar
         self.progress = 0.0  # posição na animação (0..1)
@@ -121,31 +121,31 @@ class HolderPopup(QWidget):
         qp.drawRoundedRect(card, 22, 22)
 
         mode = "one" if d.model.one_piece else "out" if self.leaving else "in"
-        HolderArt.paint(qp, QRectF(card.left() + 14, card.top() + 12, 110, card.height() - 24),
+        HolderArt.paint(qp, QRectF(card.left() + 16, card.top() + 10, 120, card.height() - 22),
                         self.progress, d.model.value, mode)
 
-        x = card.left() + 140
+        x = card.left() + 150
         qp.setPen(QColor(p.secondary))
         qp.setFont(font(9))
-        qp.drawText(QRectF(x, card.top() + 16, 200, 16), Qt.AlignLeft, d.alias)
+        qp.drawText(QRectF(x, card.top() + 30, 200, 16), Qt.AlignLeft, d.alias)
 
         head = self._headline()
         ready = head == "Pronto"
         qp.setPen(QColor(p.green if ready else p.label))
         qp.setFont(font(17, QFont.DemiBold))
-        qp.drawText(QRectF(x, card.top() + 34, 210, 30), Qt.AlignLeft, head)
+        qp.drawText(QRectF(x, card.top() + 48, 210, 30), Qt.AlignLeft, head)
 
         if d.model.one_piece:
-            self._battery_row(qp, x, card.top() + 82, "Bateria", d.charger_pct)
+            self._battery_row(qp, x, card.top() + 98, "Bateria", d.charger_pct)
             rem = d.sticks_remaining
             qp.setPen(QColor(p.secondary))
             qp.setFont(font(9))
-            qp.drawText(QRectF(x, card.top() + 112, 210, 18), Qt.AlignLeft | Qt.AlignVCenter,
+            qp.drawText(QRectF(x, card.top() + 128, 210, 18), Qt.AlignLeft | Qt.AlignVCenter,
                         f"~{rem} cigarros com esta carga" if rem is not None else "")
         else:
-            self._battery_row(qp, x, card.top() + 82, "Holder", d.holder_pct,
+            self._battery_row(qp, x, card.top() + 98, "Holder", d.holder_pct,
                               charging=not self.leaving)
-            self._battery_row(qp, x, card.top() + 112, "Carregador", d.charger_pct)
+            self._battery_row(qp, x, card.top() + 128, "Carregador", d.charger_pct)
         qp.end()
 
     def _battery_row(self, qp: QPainter, x: float, y: float, label: str, pct: int | None,
@@ -179,7 +179,7 @@ def _seg(t: float, a: float, b: float) -> float:
 
 
 class HolderArt:
-    """Ilustração animada. t vai de 0 a 1.
+    """Ilustração animada (ver art.py). t vai de 0 a 1.
 
     mode "out": o holder sai do carregador, o carregador desliza para o lado
                 e um stick entra no holder.
@@ -187,109 +187,59 @@ class HolderArt:
     mode "one": modelos de peça única; só o stick a entrar.
     """
 
-    STICK_W, STICK_H = 7.0, 48.0
-
     @classmethod
     def paint(cls, qp: QPainter, area: QRectF, t: float, model: str, mode: str) -> None:
         cx = area.center().x()
+        ground = area.bottom() - 2
         if mode == "one":
-            body = QRectF(cx - 13, area.top() + 34, 26, area.height() - 30)
-            cls._stick(qp, cx, body.top(), _seg(t, 0.15, 0.9))
-            cls._one(qp, body, model)
+            top = ground - art.ONE_H
+            cls._stick(qp, model, cx, top + 1, _seg(t, 0.15, 0.9))
+            art.draw(qp, "one", model, cx, top, art.ONE_H)
             return
         if mode == "in":
             rise, slide, stick = 1 - _seg(t, 0.0, 1.0), 0.0, 0.0
         else:
-            rise, slide, stick = _seg(t, 0.0, 0.32), _seg(t, 0.32, 0.58), _seg(t, 0.58, 1.0)
+            rise, slide, stick = _seg(t, 0.0, 0.3), _seg(t, 0.3, 0.6), _seg(t, 0.6, 1.0)
 
-        cw, ch = 62.0, 96.0
-        case = QRectF(cx - cw / 2 - 52 * slide, area.bottom() - ch, cw, ch)
-        hw, hh = 17.0, 80.0
-        inside_top = area.bottom() - ch + 14
-        out_top = inside_top - 52
-        final_top = area.top() + 30  # holder ao centro, com espaço para o stick
-        top = inside_top + (out_top - inside_top) * rise
-        top += (final_top - out_top) * slide
-        holder = QRectF(cx - hw / 2 + 10 * slide, top, hw, hh)
+        charger_top = ground - art.CHARGER_H
+        inside, out = charger_top + 3, charger_top - 40
+        final = ground - art.HOLDER_H - 8  # holder de pé, ao centro
+        top = inside + (out - inside) * rise + (final - out) * slide
 
-        if stick > 0:
-            cls._stick(qp, holder.center().x(), holder.top(), stick)
-        cls._holder(qp, holder)
-        if slide < 1:
+        if slide > 0:  # sombra do holder no "chão" quando fica sozinho
             qp.save()
-            qp.setOpacity(1 - slide)
-            cls._case(qp, case, model, led_on=rise > 0.5)
+            qp.setOpacity(slide)
+            qp.setPen(Qt.NoPen)
+            g = QRadialGradient(cx, ground - 3, 16)
+            g.setColorAt(0, QColor(0, 0, 0, 70))
+            g.setColorAt(1, QColor(0, 0, 0, 0))
+            qp.setBrush(g)
+            qp.drawEllipse(QRectF(cx - 16, ground - 6, 32, 6))
             qp.restore()
+        if slide <= 0.02:
+            # O holder sai pela abertura: desenha o carregador e por cima só a parte
+            # do holder acima do meio da abertura.
+            art.draw(qp, "charger", model, cx, charger_top, art.CHARGER_H)
+            qp.save()
+            slot_mid = charger_top + art.CHARGER_H * 15 / 214
+            qp.setClipRect(QRectF(area.left() - 20, area.top() - 40, area.width() + 40,
+                                  slot_mid - area.top() + 40))
+            art.draw(qp, "holder", model, cx, top, art.HOLDER_H)
+            qp.restore()
+            return
+        if stick > 0:
+            cls._stick(qp, model, cx, top, stick)
+        art.draw(qp, "holder", model, cx, top, art.HOLDER_H)
+        qp.save()
+        qp.setOpacity(1 - slide)
+        art.draw(qp, "charger", model, cx - 62 * slide, charger_top, art.CHARGER_H)
+        qp.restore()
 
     @staticmethod
-    def _holder(qp: QPainter, r: QRectF) -> None:
-        g = QLinearGradient(r.topLeft(), r.topRight())
-        g.setColorAt(0, QColor("#8E8E93"))
-        g.setColorAt(0.45, QColor("#E5E5EA"))
-        g.setColorAt(1, QColor("#636366"))
-        qp.setPen(Qt.NoPen)
-        qp.setBrush(g)
-        qp.drawRoundedRect(r, r.width() / 2, r.width() / 2)
-        qp.setBrush(QColor("#3A3A3C"))
-        qp.drawEllipse(QRectF(r.center().x() - 4.5, r.top() + 3, 9, 6))
-        qp.setBrush(QColor(0, 0, 0, 40))
-        qp.drawRect(QRectF(r.left(), r.top() + 22, r.width(), 2))
-
-    @staticmethod
-    def _case(qp: QPainter, r: QRectF, model: str, led_on: bool) -> None:
-        dark = theme.is_dark()
-        prime = "PRIME" in model.upper()
-        path = QPainterPath()
-        path.addRoundedRect(r, 16, 16)
-        g = QLinearGradient(r.topLeft(), r.bottomRight())
-        if prime:
-            g.setColorAt(0, QColor("#4A4A4E"))
-            g.setColorAt(1, QColor("#1C1C1E"))
-        else:
-            g.setColorAt(0, QColor("#5A5D63" if dark else "#D9DCE1"))
-            g.setColorAt(1, QColor("#3A3C40" if dark else "#A9AEB6"))
-        qp.setBrush(g)
-        qp.setPen(QPen(QColor(0, 0, 0, 50), 0.8))
-        qp.drawPath(path)
-        qp.setPen(Qt.NoPen)
-        if prime:  # capa envolvente do ILUMA PRIME
-            qp.setBrush(QColor("#2C2C2E"))
-            qp.drawRect(QRectF(r.left(), r.top() + r.height() * 0.42, r.width(),
-                               r.height() * 0.2))
-        qp.setBrush(QColor("#30D158") if led_on else QColor(255, 255, 255, 140))
-        qp.drawEllipse(QRectF(r.center().x() - 2.5, r.bottom() - 16, 5, 5))
-        qp.setBrush(QColor(0, 0, 0, 90))
-        qp.drawRoundedRect(QRectF(r.center().x() - 10.5, r.top() + 4, 21, 5), 2.5, 2.5)
-
-    @staticmethod
-    def _one(qp: QPainter, r: QRectF, model: str) -> None:
-        g = QLinearGradient(r.topLeft(), r.topRight())
-        g.setColorAt(0, QColor("#3A3A3C"))
-        g.setColorAt(0.5, QColor("#8E8E93"))
-        g.setColorAt(1, QColor("#2C2C2E"))
-        qp.setPen(Qt.NoPen)
-        qp.setBrush(g)
-        qp.drawRoundedRect(r, 11, 11)
-        qp.setBrush(QColor("#1C1C1E"))
-        qp.drawEllipse(QRectF(r.center().x() - 5, r.top() + 4, 10, 6))
-        qp.setBrush(QColor("#30D158"))
-        qp.drawEllipse(QRectF(r.center().x() - 2.5, r.top() + 30, 5, 5))
-
-    @classmethod
-    def _stick(cls, qp: QPainter, cx: float, holder_top: float, k: float) -> None:
-        """Stick TEREA a descer para o topo do holder (k: 0 longe, 1 encaixado)."""
-        w, h = cls.STICK_W, cls.STICK_H
-        inserted_top = holder_top - 22  # fica 22 px de fora, como o filtro
-        top = inserted_top - 28 * (1 - k)
-        r = QRectF(cx - w / 2, top, w, h)
+    def _stick(qp: QPainter, model: str, cx: float, entry_top: float, k: float) -> None:
+        """Stick TEREA a descer até ficar com o filtro de fora (k: 0 longe, 1 encaixado)."""
+        final = entry_top - 26
         qp.save()
         qp.setOpacity(min(k * 2.5, 1.0))
-        qp.setPen(QPen(QColor(0, 0, 0, 45), 0.6))
-        qp.setBrush(QColor("#F5F1E8"))
-        qp.drawRoundedRect(r, 2, 2)
-        qp.setPen(Qt.NoPen)
-        qp.setBrush(QColor("#D9A441"))  # filtro
-        qp.drawRect(QRectF(r.left() + 0.4, r.top() + 0.4, w - 0.8, 13))
-        qp.setBrush(QColor("#B4472E"))  # faixa de cor do sabor
-        qp.drawRect(QRectF(r.left() + 0.4, r.top() + 13, w - 0.8, 3))
+        art.draw(qp, "stick", model, cx, final - 30 * (1 - k), art.STICK_H)
         qp.restore()
