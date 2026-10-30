@@ -1,4 +1,7 @@
-"""Interface Windows (PySide6) com ícone na barra de tarefas e notificações."""
+"""Interface Windows (PySide6) com ícone na área de notificação e avisos.
+
+O aspeto segue as Human Interface Guidelines da Apple (ver theme.py).
+"""
 
 from __future__ import annotations
 
@@ -8,16 +11,17 @@ from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import QRectF, Qt, QTimer
-from PySide6.QtGui import QAction, QColor, QFont, QIcon, QPainter, QPixmap
+from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
-    QApplication, QCheckBox, QDialog, QDialogButtonBox, QFormLayout, QFrame, QGridLayout,
-    QHBoxLayout, QInputDialog, QLabel, QListWidget, QListWidgetItem, QMainWindow,
-    QMessageBox, QProgressBar, QPushButton, QScrollArea, QSpinBox, QSystemTrayIcon,
-    QVBoxLayout, QWidget, QMenu,
+    QApplication, QCheckBox, QDialog, QDialogButtonBox, QFormLayout, QFrame,
+    QGraphicsDropShadowEffect, QHBoxLayout, QInputDialog, QLabel, QListWidget, QListWidgetItem,
+    QMainWindow, QMenu, QMessageBox, QPushButton, QScrollArea, QSpinBox, QSystemTrayIcon,
+    QVBoxLayout, QWidget,
 )
 
-from . import storage, updater
+from . import storage, theme, updater
 from .ble import IqosConnection, SimulatedConnection, scan
+from .theme import BatteryRing, font
 from .tracker import Alert, DeviceState, Settings
 from .version import __version__
 
@@ -33,35 +37,17 @@ def make_icon(color: str = ACCENT) -> QIcon:
     p.setPen(Qt.NoPen)
     p.drawRoundedRect(QRectF(4, 4, 56, 56), 14, 14)
     p.setPen(QColor("white"))
-    f = QFont("Segoe UI", 22)
-    f.setBold(True)
-    p.setFont(f)
+    p.setFont(font(22, QFont.Bold))
     p.drawText(pm.rect(), Qt.AlignCenter, "IQ")
     p.end()
     return QIcon(pm)
 
 
-def battery_bar() -> QProgressBar:
-    bar = QProgressBar()
-    bar.setRange(0, 100)
-    bar.setTextVisible(True)
-    bar.setFixedHeight(18)
-    return bar
-
-
-def set_bar(bar: QProgressBar, pct: int | None, fmt: str = "%p%") -> None:
-    if pct is None:
-        bar.setValue(0)
-        bar.setFormat("—")
-        color = "#9aa0a6"
-    else:
-        bar.setValue(pct)
-        bar.setFormat(fmt)
-        color = "#d93025" if pct <= 20 else "#f29900" if pct <= 40 else "#1e8e3e"
-    bar.setStyleSheet(
-        "QProgressBar{border:1px solid #c8ccd0;border-radius:4px;text-align:center;}"
-        f"QProgressBar::chunk{{background:{color};border-radius:3px;}}"
-    )
+def secondary(text: str = "", size: float = 9) -> QLabel:
+    lbl = QLabel(text)
+    lbl.setObjectName("secondary")
+    lbl.setFont(font(size))
+    return lbl
 
 
 class Stat(QWidget):
@@ -71,16 +57,17 @@ class Stat(QWidget):
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(0)
         self.value = QLabel("—")
-        f = self.value.font()
-        f.setPointSize(20)
-        f.setBold(True)
-        self.value.setFont(f)
+        self.value.setFont(font(20, QFont.DemiBold))
         self.value.setAlignment(Qt.AlignCenter)
-        cap = QLabel(caption)
+        cap = secondary(caption)
         cap.setAlignment(Qt.AlignCenter)
-        cap.setStyleSheet("color:#5f6368;")
         lay.addWidget(self.value)
         lay.addWidget(cap)
+        self.caption = caption
+
+    def set(self, text: str) -> None:
+        self.value.setText(text)
+        self.setAccessibleName(f"{self.caption}: {text}")
 
 
 class DeviceCard(QFrame):
@@ -88,141 +75,157 @@ class DeviceCard(QFrame):
         super().__init__()
         self.app, self.dev = app, dev
         self.setObjectName("card")
-        self.setStyleSheet("#card{background:palette(base);border:1px solid #d0d4d8;"
-                           "border-radius:10px;}")
+        shadow = QGraphicsDropShadowEffect(self, blurRadius=18, xOffset=0, yOffset=2)
+        shadow.setColor(QColor(0, 0, 0, 28))
+        self.setGraphicsEffect(shadow)
         lay = QVBoxLayout(self)
+        lay.setContentsMargins(18, 14, 12, 16)
+        lay.setSpacing(12)
 
         head = QHBoxLayout()
-        self.dot = QLabel("●")
+        names = QVBoxLayout()
+        names.setSpacing(0)
         self.title = QLabel()
-        f = self.title.font()
-        f.setPointSize(13)
-        f.setBold(True)
-        self.title.setFont(f)
-        self.model = QLabel()
-        self.model.setStyleSheet("color:#5f6368;")
-        head.addWidget(self.dot)
-        head.addWidget(self.title)
-        head.addWidget(self.model)
+        self.title.setFont(font(13, QFont.DemiBold))
+        self.subtitle = secondary()
+        names.addWidget(self.title)
+        names.addWidget(self.subtitle)
+        head.addLayout(names)
         head.addStretch()
-        self.status = QLabel()
-        self.status.setStyleSheet("color:#5f6368;")
-        head.addWidget(self.status)
+        self.more = QPushButton("⋯")
+        self.more.setObjectName("more")
+        self.more.setToolTip("Mais ações")
+        self.more.setAccessibleName(f"Mais ações para {dev.alias}")
+        self.menu = QMenu(self)
+        self.a_conn = self.menu.addAction("", lambda: app.toggle_connection(dev))
+        self.menu.addAction("Mudar o nome…", lambda: app.rename(dev))
+        self.menu.addAction("Repor contagem", lambda: app.reset_counts(dev))
+        self.menu.addSeparator()
+        self.menu.addAction("Remover…", lambda: app.remove(dev))
+        self.more.setMenu(self.menu)
+        head.addWidget(self.more, 0, Qt.AlignTop)
         lay.addLayout(head)
 
-        grid = QGridLayout()
-        self.charger_lbl = QLabel("Carregador")
-        self.charger_bar = battery_bar()
-        self.holder_lbl = QLabel("Holder")
-        self.holder_bar = battery_bar()
-        grid.addWidget(self.charger_lbl, 0, 0)
-        grid.addWidget(self.charger_bar, 0, 1)
-        grid.addWidget(self.holder_lbl, 1, 0)
-        grid.addWidget(self.holder_bar, 1, 1)
-        grid.setColumnStretch(1, 1)
-        lay.addLayout(grid)
+        rings = QHBoxLayout()
+        rings.addStretch()
+        self.r_charger = BatteryRing("Carregador")
+        self.r_holder = BatteryRing("Holder")
+        rings.addWidget(self.r_charger)
+        rings.addSpacing(16)
+        rings.addWidget(self.r_holder)
+        rings.addStretch()
+        lay.addLayout(rings)
+
+        line = QFrame()
+        line.setFixedHeight(1)
+        line.setObjectName("separator")
+        lay.addWidget(line)
 
         stats = QHBoxLayout()
+        self.s_left = Stat("restam")
+        self.s_since = Stat("desde a carga")
         self.s_today = Stat("hoje")
-        self.s_since = Stat("desde a última carga")
-        self.s_left = Stat("restam (estimativa)")
-        for s in (self.s_today, self.s_since, self.s_left):
+        for s in (self.s_left, self.s_since, self.s_today):
             stats.addWidget(s)
         lay.addLayout(stats)
 
-        self.event = QLabel()
-        self.event.setStyleSheet("color:#5f6368;")
+        self.event = secondary()
+        self.event.setWordWrap(True)
+        self.event.setAlignment(Qt.AlignCenter)
         lay.addWidget(self.event)
-
-        btns = QHBoxLayout()
-        self.b_conn = QPushButton()
-        self.b_conn.clicked.connect(lambda: app.toggle_connection(dev))
-        b_ren = QPushButton("Renomear")
-        b_ren.clicked.connect(lambda: app.rename(dev))
-        b_reset = QPushButton("Repor contagem")
-        b_reset.clicked.connect(lambda: app.reset_counts(dev))
-        b_rm = QPushButton("Remover")
-        b_rm.clicked.connect(lambda: app.remove(dev))
-        for b in (self.b_conn, b_ren, b_reset, b_rm):
-            btns.addWidget(b)
-        btns.addStretch()
-        lay.addLayout(btns)
         self.refresh()
+
+    def contextMenuEvent(self, ev) -> None:
+        self.menu.exec(ev.globalPos())
 
     def refresh(self) -> None:
         d = self.dev
         self.title.setText(d.alias)
-        self.model.setText(d.model.value)
-        self.dot.setStyleSheet(f"color:{'#1e8e3e' if d.connected else '#9aa0a6'};font-size:16px;")
-        self.status.setText(d.status_text)
+        dot = "🟢" if d.connected else "⚪"
+        self.subtitle.setText(f"{d.model.value} · {dot} {d.status_text}")
         one = d.model.one_piece
-        self.charger_lbl.setText("Bateria" if one else "Carregador")
-        set_bar(self.charger_bar, d.charger_pct)
-        self.holder_lbl.setVisible(not one)
-        self.holder_bar.setVisible(not one)
+        self.r_charger.caption = "Bateria" if one else "Carregador"
+        self.r_charger.set_value(d.charger_pct, d.charging, "a carregar" if d.charging else "")
+        self.r_holder.setVisible(not one)
         if d.holder_in_charger:
-            set_bar(self.holder_bar, d.holder_pct, "%p% (no carregador)")
+            self.r_holder.set_value(d.holder_pct, (d.holder_pct or 100) < 100, "no carregador")
         elif d.holder_in_charger is False:
-            set_bar(self.holder_bar, None)
-            self.holder_bar.setFormat("fora do carregador")
+            self.r_holder.set_value(None, note="fora do carregador")
         else:
-            set_bar(self.holder_bar, None)
-        self.s_today.value.setText(str(d.sticks_today))
-        self.s_since.value.setText(str(d.sticks_since_charge))
+            self.r_holder.set_value(None)
         rem = d.sticks_remaining
-        self.s_left.value.setText("—" if rem is None else f"~{rem}")
+        self.s_left.set("—" if rem is None else f"~{rem}")
+        self.s_since.set(str(d.sticks_since_charge))
+        self.s_today.set(str(d.sticks_today))
         extra = []
         if d.last_event:
             extra.append(d.last_event)
         if d.connected and not d.telemetry_ok:
-            extra.append("contador do dispositivo indisponível: a contar pelo holder")
-        if d.battery_voltage:
-            extra.append(f"{d.battery_voltage:.2f} V")
-        extra.append(f"{d.pct_per_stick:.1f}% por cigarro")
+            extra.append("a contar pelo holder")
         self.event.setText(" · ".join(extra))
-        self.b_conn.setText("Desligar" if d.address in self.app.conns else "Ligar")
+        self.event.setVisible(bool(extra))
+        self.a_conn.setText("Desligar" if d.address in self.app.conns else "Ligar")
+        self.setToolTip(f"{d.pct_per_stick:.1f}% de bateria por cigarro"
+                        + (f" · {d.battery_voltage:.2f} V" if d.battery_voltage else ""))
 
 
 class ScanDialog(QDialog):
     def __init__(self, parent: "MainWindow") -> None:
         super().__init__(parent)
         self.setWindowTitle("Adicionar IQOS")
-        self.resize(420, 320)
+        self.resize(420, 340)
         lay = QVBoxLayout(self)
-        self.info = QLabel("Ponha o IQOS em modo de emparelhamento e carregue em Procurar.")
+        lay.setContentsMargins(20, 18, 20, 18)
+        t = QLabel("Adicionar IQOS")
+        t.setFont(font(15, QFont.DemiBold))
+        lay.addWidget(t)
+        self.info = secondary("Ponha o IQOS em modo de emparelhamento. A procura começa sozinha.",
+                              10)
         self.info.setWordWrap(True)
         lay.addWidget(self.info)
         self.list = QListWidget()
         lay.addWidget(self.list)
-        self.b_scan = QPushButton("Procurar")
+        row = QHBoxLayout()
+        self.b_scan = QPushButton("Procurar outra vez")
         self.b_scan.clicked.connect(lambda: asyncio.ensure_future(self.do_scan()))
-        lay.addWidget(self.b_scan)
-        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        bb.button(QDialogButtonBox.Ok).setText("Adicionar selecionados")
-        bb.accepted.connect(self.accept)
-        bb.rejected.connect(self.reject)
-        lay.addWidget(bb)
+        row.addWidget(self.b_scan)
+        row.addStretch()
+        cancel = QPushButton("Cancelar")
+        cancel.clicked.connect(self.reject)
+        self.ok = QPushButton("Adicionar")
+        self.ok.setObjectName("primary")
+        self.ok.setDefault(True)
+        self.ok.setEnabled(False)
+        self.ok.clicked.connect(self.accept)
+        row.addWidget(cancel)
+        row.addWidget(self.ok)
+        lay.addLayout(row)
         self.known = {d.address for d in parent.settings.devices}
 
     async def do_scan(self) -> None:
         self.b_scan.setEnabled(False)
-        self.info.setText("A procurar durante 8 segundos…")
+        self.info.setText("A procurar IQOS por perto…")
         self.list.clear()
         try:
             found = await scan(8)
         except Exception as e:
-            self.info.setText(f"Erro no Bluetooth: {e}. Confirme que está ligado no Windows.")
+            self.info.setText(f"O Bluetooth não respondeu ({e}). Confirme que está ligado "
+                              "nas Definições do Windows.")
             self.b_scan.setEnabled(True)
             return
         for f in found:
             if f.address in self.known:
                 continue
-            it = QListWidgetItem(f"{f.name}  ({f.address}, {f.rssi} dBm)")
+            it = QListWidgetItem(f"{f.name}")
+            it.setToolTip(f"{f.address} · sinal {f.rssi} dBm")
             it.setData(Qt.UserRole, (f.address, f.name))
             it.setCheckState(Qt.Checked)
             self.list.addItem(it)
-        self.info.setText(f"Encontrados {self.list.count()} IQOS novos." if self.list.count()
-                          else "Nenhum IQOS encontrado. Confirme o modo de emparelhamento.")
+        n = self.list.count()
+        self.info.setText(f"{n} IQOS encontrado{'s' if n != 1 else ''}." if n else
+                          "Não encontrei nenhum IQOS. Confirme que está em modo de "
+                          "emparelhamento e perto do computador.")
+        self.ok.setEnabled(n > 0)
         self.b_scan.setEnabled(True)
 
     def selected(self) -> list[tuple[str, str]]:
@@ -236,6 +239,8 @@ class SettingsDialog(QDialog):
         self.setWindowTitle("Definições")
         s = parent.settings
         form = QFormLayout(self)
+        form.setContentsMargins(20, 18, 20, 18)
+        form.setVerticalSpacing(10)
         self.low = QSpinBox()
         self.low.setRange(5, 60)
         self.low.setSuffix(" %")
@@ -246,13 +251,17 @@ class SettingsDialog(QDialog):
         self.poll.setValue(s.poll_seconds)
         self.notify = QCheckBox("Avisar quando cada cigarro termina")
         self.notify.setChecked(s.notify_stick_end)
-        form.addRow("Avisar bateria fraca abaixo de", self.low)
-        form.addRow("Ler o contador a cada", self.poll)
         self.auto = QCheckBox("Instalar atualizações automaticamente")
         self.auto.setChecked(s.auto_update)
+        form.addRow("Avisar bateria fraca abaixo de", self.low)
+        form.addRow("Ler o contador a cada", self.poll)
         form.addRow(self.notify)
         form.addRow(self.auto)
+        form.addRow(secondary(f"IQOS Monitor {__version__}"))
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.button(QDialogButtonBox.Ok).setText("Guardar")
+        bb.button(QDialogButtonBox.Ok).setObjectName("primary")
+        bb.button(QDialogButtonBox.Cancel).setText("Cancelar")
         bb.accepted.connect(self.accept)
         bb.rejected.connect(self.reject)
         form.addRow(bb)
@@ -266,34 +275,64 @@ class MainWindow(QMainWindow):
         self.conns: dict[str, IqosConnection] = {}
         self.cards: dict[str, DeviceCard] = {}
         self.quitting = False
-        self.setWindowTitle(f"IQOS Monitor {__version__}" + (" — simulação" if demo else ""))
+        self.setWindowTitle("IQOS Monitor" + (" — simulação" if demo else ""))
         self.setWindowIcon(make_icon())
-        self.resize(560, 640)
+        self.resize(440, 720)
+        self.apply_theme()
+        try:
+            QApplication.styleHints().colorSchemeChanged.connect(self.apply_theme)
+        except AttributeError:
+            pass
 
-        tb = self.addToolBar("main")
-        tb.setMovable(False)
-        a_add = QAction("Adicionar IQOS", self)
-        a_add.triggered.connect(self.add_devices)
-        a_set = QAction("Definições", self)
-        a_set.triggered.connect(self.edit_settings)
-        a_upd = QAction("Procurar atualizações", self)
-        a_upd.triggered.connect(lambda: asyncio.ensure_future(self.check_updates(manual=True)))
-        tb.addAction(a_add)
-        tb.addAction(a_set)
-        tb.addAction(a_upd)
+        root = QWidget()
+        root_l = QVBoxLayout(root)
+        root_l.setContentsMargins(20, 18, 20, 0)
+        root_l.setSpacing(10)
+        header = QHBoxLayout()
+        title = QLabel("Os meus IQOS")
+        title.setFont(font(20, QFont.Bold))
+        header.addWidget(title)
+        header.addStretch()
+        add = QPushButton("＋ Adicionar")
+        add.setObjectName("primary")
+        add.clicked.connect(self.add_devices)
+        header.addWidget(add)
+        more = QPushButton("⋯")
+        more.setObjectName("more")
+        more.setToolTip("Mais")
+        more.setAccessibleName("Mais opções")
+        app_menu = QMenu(self)
+        app_menu.addAction("Definições…", self.edit_settings)
+        app_menu.addAction("Procurar atualizações",
+                           lambda: asyncio.ensure_future(self.check_updates(manual=True)))
+        app_menu.addSeparator()
+        app_menu.addAction("Sair", self.quit)
+        more.setMenu(app_menu)
+        header.addWidget(more)
+        root_l.addLayout(header)
 
         self.list_w = QWidget()
+        self.list_w.setObjectName("list")
         self.list_l = QVBoxLayout(self.list_w)
-        self.list_l.setSpacing(12)
-        self.empty = QLabel("Ainda não há nenhum IQOS.\nCarregue em “Adicionar IQOS”.")
-        self.empty.setAlignment(Qt.AlignCenter)
-        self.empty.setStyleSheet("color:#5f6368;font-size:14px;")
+        self.list_l.setContentsMargins(0, 6, 0, 18)
+        self.list_l.setSpacing(14)
+        self.empty = QWidget()
+        el = QVBoxLayout(self.empty)
+        e1 = QLabel("Nenhum IQOS ainda")
+        e1.setFont(font(15, QFont.DemiBold))
+        e2 = secondary("Ligue o Bluetooth, ponha o IQOS em modo de emparelhamento\n"
+                       "e carregue em Adicionar.", 10)
+        for w in (e1, e2):
+            w.setAlignment(Qt.AlignCenter)
+            el.addWidget(w)
         self.list_l.addWidget(self.empty)
         self.list_l.addStretch()
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
         scroll.setWidget(self.list_w)
-        self.setCentralWidget(scroll)
+        root_l.addWidget(scroll)
+        self.setCentralWidget(root)
 
         self.tray = QSystemTrayIcon(make_icon(), self)
         menu = QMenu()
@@ -317,6 +356,12 @@ class MainWindow(QMainWindow):
         for d in settings.devices:
             self._add_card(d)
             self.connect_device(d)
+
+    def apply_theme(self, *_args) -> None:
+        QApplication.instance().setFont(font(10))
+        QApplication.instance().setStyleSheet(theme.stylesheet(theme.palette()))
+        for c in getattr(self, "cards", {}).values():
+            c.refresh()
 
     # ---- dispositivos ------------------------------------------------------
 
@@ -377,7 +422,13 @@ class MainWindow(QMainWindow):
         self.schedule_save()
 
     def remove(self, d: DeviceState) -> None:
-        if QMessageBox.question(self, "Remover", f"Remover {d.alias}?") != QMessageBox.Yes:
+        box = QMessageBox(QMessageBox.Warning, f"Remover {d.alias}?",
+                          f"Remover {d.alias}?", parent=self)
+        box.setInformativeText("A contagem guardada deste IQOS é apagada.")
+        rm = box.addButton("Remover", QMessageBox.DestructiveRole)
+        box.addButton("Cancelar", QMessageBox.RejectRole)
+        box.exec()
+        if box.clickedButton() is not rm:
             return
         conn = self.conns.pop(d.address, None)
         if conn:

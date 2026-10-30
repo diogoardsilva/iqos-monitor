@@ -70,6 +70,10 @@ class DeviceState:
     def from_dict(cls, d: dict) -> "DeviceState":
         return cls(**{k: d[k] for k in cls.PERSISTED if k in d})
 
+    @property
+    def charging(self) -> bool:
+        return self._charging
+
     # ---- Estimativas -------------------------------------------------------
 
     @property

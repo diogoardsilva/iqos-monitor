@@ -23,6 +23,7 @@ def main() -> int:
     ap.add_argument("--updated", action="store_true", help=argparse.SUPPRESS)
     ap.add_argument("--screenshot", type=Path, help=argparse.SUPPRESS)
     ap.add_argument("--after", type=float, default=8, help=argparse.SUPPRESS)
+    ap.add_argument("--dark", action="store_true", help=argparse.SUPPRESS)
     args = ap.parse_args()
 
     log_file = storage.state_path().with_name("iqos-monitor.log")
@@ -34,6 +35,9 @@ def main() -> int:
     app = QApplication(sys.argv)
     app.setApplicationName("IQOS Monitor")
     app.setQuitOnLastWindowClosed(False)
+    if args.dark:
+        from . import theme
+        theme.FORCE_DARK = True
     loop = qasync.QEventLoop(app)
     asyncio.set_event_loop(loop)
 
