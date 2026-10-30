@@ -47,6 +47,8 @@ build.bat            # gera dist\IqosMonitor.exe
 
 ## Publicar uma versão nova
 
+Na página do repositório: **Releases → Draft a new release**, escreva uma tag nova (por exemplo `v0.2.0`) e carregue em **Publish release**. Ou, na linha de comandos:
+
 ```
 git tag v0.2.0
 git push origin v0.2.0
