@@ -6,10 +6,12 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 VERSION="${1:-$(sed -n 's/^__version__ = "\(.*\)"/\1/p' ../iqos_monitor/version.py)}"
-ARCHS=(--arch arm64 --arch x86_64)  # binário universal: Apple Silicon e Intel
+# Por omissão compila só para este Mac. UNIVERSAL=1 junta Apple Silicon e Intel
+# (o Xcode 27 já não aceita x86_64 em alguns casos).
+if [ "${UNIVERSAL:-0}" = 1 ]; then ARCHS=(--arch arm64 --arch x86_64); else ARCHS=(); fi
 
-swift build -c release "${ARCHS[@]}"
-BIN="$(swift build -c release "${ARCHS[@]}" --show-bin-path)/IqosMonitor"
+swift build -c release ${ARCHS[@]+"${ARCHS[@]}"}
+BIN="$(swift build -c release ${ARCHS[@]+"${ARCHS[@]}"} --show-bin-path)/IqosMonitor"
 
 APP=build/IqosMonitor.app
 rm -rf "$APP" build/IqosMonitor-macOS.zip
