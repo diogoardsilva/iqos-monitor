@@ -24,6 +24,12 @@ public struct Alert: Equatable, Sendable {
     public var kind: Kind
     public var title: String
     public var message: String
+
+    public init(kind: Kind, title: String, message: String) {
+        self.kind = kind
+        self.title = title
+        self.message = message
+    }
 }
 
 public struct DeviceState: Identifiable, Codable, Equatable, Sendable {
