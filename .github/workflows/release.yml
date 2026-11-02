@@ -20,6 +20,49 @@ jobs:
       - run: pip install bleak pytest
       - run: python -m pytest -q
 
+  macos:
+    # App nativa para Mac (SwiftUI + Liquid Glass). Compila e testa sempre;
+    # o .zip fica nos artefactos de cada execução para experimentar.
+    runs-on: macos-26
+    defaults:
+      run:
+        working-directory: macos
+    steps:
+      - uses: actions/checkout@v4
+      - name: Versão a partir da tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        working-directory: .
+        run: sed -i '' "s/^__version__ = .*/__version__ = \"${GITHUB_REF_NAME#v}\"/" iqos_monitor/version.py
+      - run: swift --version
+      - run: swift test
+      - run: ./build-app.sh
+      - name: Capturas de ecrã (modo de simulação)
+        continue-on-error: true
+        run: |
+          mkdir -p build/screens
+          for mode in Light Dark; do
+            if [ "$mode" = Dark ]; then defaults write -g AppleInterfaceStyle Dark; else defaults delete -g AppleInterfaceStyle 2>/dev/null || true; fi
+            open -n build/IqosMonitor.app --args --demo
+            sleep 25
+            screencapture -x "build/screens/$mode.png"
+            pkill -x IqosMonitor || true
+            sleep 2
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: IqosMonitor-macOS
+          path: |
+            macos/build/IqosMonitor-macOS.zip
+            macos/build/screens/
+      - name: Publicar na release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Espera que a release exista (é criada pelo job do Windows ou na página do GitHub).
+          for i in $(seq 1 60); do gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 && break; sleep 20; done
+          gh release upload "$GITHUB_REF_NAME" build/IqosMonitor-macOS.zip --clobber
+
   release:
     # Cada tag vX.Y.Z gera o .exe e publica a release que a app instala sozinha.
     if: startsWith(github.ref, 'refs/tags/v')

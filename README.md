@@ -1,12 +1,12 @@
 # IQOS Monitor
 
-App para Windows que se liga por Bluetooth a um ou mais IQOS ao mesmo tempo e:
+App para Windows e macOS que se liga por Bluetooth a um ou mais IQOS ao mesmo tempo e:
 
 - mostra a bateria do carregador (ou do dispositivo, nos modelos ONE) e do holder;
 - conta os cigarros fumados hoje e desde a última carga;
 - estima quantos cigarros ainda dá para fumar com a carga atual, e aprende o consumo real de cada dispositivo;
 - avisa quando cada cigarro termina, quando o holder tem de voltar ao carregador, quando a bateria está fraca e quando a carga fica completa;
-- fica na área de notificação do Windows e reconecta-se sozinha;
+- fica na área de notificação do Windows (ou na barra de menus do Mac) e reconecta-se sozinha;
 - procura atualizações nas releases do GitHub e instala-as sozinha.
 
 ## Instalar
@@ -19,6 +19,48 @@ App para Windows que se liga por Bluetooth a um ou mais IQOS ao mesmo tempo e:
 O IQOS só aceita uma ligação de cada vez. Se a app IQOS do telemóvel estiver ligada, desligue-a primeiro.
 
 Os dados ficam em `%APPDATA%\IqosMonitor\` (`state.json` e `iqos-monitor.log`).
+
+## macOS
+
+A versão para Mac é uma app nativa em SwiftUI, com o visual Liquid Glass do macOS 26 Tahoe (cartões e botões de vidro, tema claro e escuro). Funciona a partir do macOS 14; antes do Tahoe usa materiais translúcidos no lugar do vidro.
+
+- Janela "Os meus IQOS" com anéis de bateria, contagem e estimativa de cada IQOS.
+- Ícone na barra de menus com o estado de todos os IQOS.
+- Avisos no Centro de Notificações e a janela no canto quando tira o holder.
+
+### Instalar
+
+1. Descarregue `IqosMonitor-macOS.zip` da [última release](../../releases/latest) e arraste o `IqosMonitor.app` para Aplicações.
+2. A app não está assinada com uma conta de programador da Apple, por isso o macOS bloqueia-a da primeira vez. Abra-a, feche o aviso e vá a **Definições do Sistema → Privacidade e segurança → Abrir mesmo assim**. (Ou no Terminal: `xattr -dr com.apple.quarantine "/Applications/IqosMonitor.app"`.)
+3. Aceite o acesso ao Bluetooth e às notificações quando o macOS perguntar.
+
+Os dados ficam em `~/Library/Application Support/IqosMonitor/`. O formato do `state.json` é o mesmo do Windows.
+
+No Mac a app avisa quando há uma versão nova e abre a página da release, mas não se substitui sozinha.
+
+### Compilar
+
+Precisa do Xcode 26 (para o Liquid Glass).
+
+```
+cd macos
+swift test                     # testes do protocolo e da contagem
+swift run IqosMonitor --demo   # experimentar com IQOS simulados
+./build-app.sh                 # gera build/IqosMonitor.app e build/IqosMonitor-macOS.zip
+open build/IqosMonitor.app --args --demo
+```
+
+Para o Bluetooth e as notificações use o `.app` gerado pelo `build-app.sh`: o macOS só os autoriza a apps com `Info.plist`.
+
+| Ficheiro | O quê |
+|---|---|
+| `macos/Sources/IqosCore/` | protocolo, contagem e alertas (tradução de `protocol.py` e `tracker.py`) |
+| `macos/Sources/IqosMonitor/Bluetooth.swift` | ligação CoreBluetooth, reconexão e telemetria |
+| `macos/Sources/IqosMonitor/Views.swift` | janela, cartões de vidro, barra de menus e definições |
+| `macos/Sources/IqosMonitor/CornerPopup.swift` | janela no canto com a animação do holder |
+| `macos/Sources/IqosMonitor/Glass.swift` | Liquid Glass com recurso a materiais no macOS 14/15 |
+
+Quem mexer nas regras de contagem em `tracker.py` deve fazer a mesma alteração em `macos/Sources/IqosCore/Tracker.swift` (os testes dos dois lados são os mesmos).
 
 ## Experimentar sem IQOS
 
@@ -54,7 +96,7 @@ git tag v0.2.0
 git push origin v0.2.0
 ```
 
-O GitHub Actions corre os testes, gera o `.exe` no Windows, calcula o SHA-256 e cria a release. As apps instaladas encontram-na em até 6 horas (ou logo, em **Procurar atualizações**), confirmam o SHA-256, trocam o executável e reiniciam.
+O GitHub Actions corre os testes, gera o `.exe` no Windows, calcula o SHA-256 e cria a release. Junta também o `IqosMonitor-macOS.zip`, compilado num Mac do GitHub. As apps instaladas encontram-na em até 6 horas (ou logo, em **Procurar atualizações**), confirmam o SHA-256, trocam o executável e reiniciam.
 
 ## Como funciona o protocolo
 
