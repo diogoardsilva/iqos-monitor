@@ -2,6 +2,7 @@
 // App só da barra de menus (LSUIElement): sem ícone no Dock nem janela principal.
 
 import AppKit
+import IqosCore
 import SwiftUI
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -35,7 +36,7 @@ struct IqosMonitorApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
 
     var body: some Scene {
-        Settings {
+        SwiftUI.Settings {
             SettingsView(model: delegate.model)
         }
     }
