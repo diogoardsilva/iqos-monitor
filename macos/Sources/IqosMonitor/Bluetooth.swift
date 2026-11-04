@@ -57,17 +57,34 @@ final class Bluetooth: NSObject, CBCentralManagerDelegate {
     func register(_ link: IqosLink) { links[link.id] = link }
     func unregister(_ link: IqosLink) { links[link.id] = nil }
 
-    func startScan(_ found: @escaping (FoundDevice) -> Void) {
+    private var scanToken = 0
+    var isScanning: Bool { onFound != nil }
+
+    /// Começa uma procura e devolve o seu número; uma procura nova substitui a anterior.
+    @discardableResult
+    func startScan(_ found: @escaping (FoundDevice) -> Void) -> Int {
+        scanToken += 1
         onFound = found
         whenReady { [weak self] in
             self?.central.scanForPeripherals(withServices: nil,
                                              options: [CBCentralManagerScanOptionAllowDuplicatesKey: false])
         }
+        return scanToken
     }
 
-    func stopScan() {
+    /// Pára a procura (só a indicada, se vier um número).
+    func stopScan(_ token: Int? = nil) {
+        if let token, token != scanToken { return }
         onFound = nil
         if central.state == .poweredOn { central.stopScan() }
+    }
+
+    /// IQOS que o Mac já tem ligados por Bluetooth (por exemplo, emparelhados antes).
+    func connectedIqos() -> [FoundDevice] {
+        guard central.state == .poweredOn else { return [] }
+        return central.retrieveConnectedPeripherals(withServices: [CBUUID(string: IqosUUID.coreService)]).map {
+            FoundDevice(id: $0.identifier.uuidString, name: $0.name ?? "IQOS", rssi: 0)
+        }
     }
 
     // MARK: CBCentralManagerDelegate

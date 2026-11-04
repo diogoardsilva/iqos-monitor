@@ -309,6 +309,7 @@ struct ScanView: View {
     @State private var found: [FoundDevice] = []
     @State private var selected: Set<String> = []
     @State private var searching = true
+    @State private var token = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -350,7 +351,7 @@ struct ScanView: View {
         .padding(12)
         .background(ModuleBackground())
         .onAppear(perform: scan)
-        .onDisappear { Bluetooth.shared.stopScan() }
+        .onDisappear { Bluetooth.shared.stopScan(token) }
     }
 
     private var info: String {
@@ -365,15 +366,16 @@ struct ScanView: View {
 
     private func scan() {
         searching = true
-        Bluetooth.shared.startScan { f in
+        token = Bluetooth.shared.startScan { f in
             guard !known.contains(f.id), !found.contains(where: { $0.id == f.id }) else { return }
             found.append(f)
             found.sort { $0.rssi > $1.rssi }
             selected.insert(f.id)
         }
+        let mine = token
         DispatchQueue.main.asyncAfter(deadline: .now() + 8) {
-            Bluetooth.shared.stopScan()
-            searching = false
+            Bluetooth.shared.stopScan(mine)
+            if token == mine { searching = false }
         }
     }
 }
@@ -394,6 +396,12 @@ struct SettingsView: View {
                             openAtLogin = SMAppService.mainApp.status == .enabled
                         }
                     }
+            }
+            Section("IQOS") {
+                Toggle("Encontrar e ligar IQOS automaticamente", isOn: $model.settings.autoDetect)
+                Text("Procura IQOS por perto a cada 2 minutos e adiciona os que encontrar.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             Section("Avisos") {
                 Toggle("Quando cada cigarro termina", isOn: $model.settings.notifyStickEnd)
@@ -421,6 +429,7 @@ struct SettingsView: View {
         .onChange(of: model.settings.notifyStickEnd) { model.scheduleSave() }
         .onChange(of: model.settings.showPopup) { model.scheduleSave() }
         .onChange(of: model.settings.autoUpdate) { model.scheduleSave() }
+        .onChange(of: model.settings.autoDetect) { model.scheduleSave(); model.autoScan() }
     }
 
     /// Valores do menu, incluindo o atual se vier de uma versão antiga.

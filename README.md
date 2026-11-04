@@ -25,6 +25,7 @@ Os dados ficam em `%APPDATA%\IqosMonitor\` (`state.json` e `iqos-monitor.log`).
 A versão para Mac é uma app nativa em SwiftUI que vive só na barra de menus, sem ícone no Dock. Ao clicar no ícone abre-se um painel no vidro do sistema (Liquid Glass no macOS 26 ou mais recente), como o Centro de Controlo:
 
 - um módulo por IQOS, com anéis de bateria no estilo do widget Baterias (o aparelho desenhado ao centro), cigarros restantes e de hoje;
+- encontra e liga os IQOS sozinha: liga-se aos conhecidos ao abrir e quando voltam ao alcance, e a cada 2 minutos procura IQOS mesmo ao pé e adiciona-os (pode desligar-se nas Definições);
 - adicionar, mudar o nome, repor e remover IQOS sem sair do painel;
 - avisos no Centro de Notificações e a janela no canto quando tira o holder;
 - Definições com "Abrir ao iniciar sessão". Se o ícone ficar escondido, abrir a app outra vez mostra as Definições.

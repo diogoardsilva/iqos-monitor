@@ -57,40 +57,34 @@ final class StatusPanel: NSObject {
             guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
             ctx.setFillColor(NSColor.black.cgColor)
             ctx.setStrokeColor(NSColor.black.cgColor)
-            // Tampa aberta, inclinada para trás.
-            let lid = CGMutablePath()
-            lid.move(to: CGPoint(x: 3.8, y: 11.6))
-            lid.addLine(to: CGPoint(x: 14.2, y: 11.6))
-            lid.addLine(to: CGPoint(x: 15.6, y: 16.6))
-            lid.addLine(to: CGPoint(x: 5.2, y: 16.6))
-            lid.closeSubpath()
-            ctx.setLineWidth(1.2)
-            ctx.setLineJoin(.round)
-            ctx.addPath(lid)
-            ctx.strokePath()
-            // Três sticks a espreitar, com uma folga transparente à volta.
-            let sticks = [5.6, 8.15, 10.7].map { CGRect(x: $0, y: 11, width: 1.7, height: 4.2) }
-            ctx.setBlendMode(.clear)
-            for r in sticks {
-                ctx.addPath(CGPath(roundedRect: r.insetBy(dx: -0.7, dy: -0.7), cornerWidth: 1.5, cornerHeight: 1.5, transform: nil))
+            func round(_ r: CGRect, _ radius: CGFloat) -> CGPath {
+                CGPath(roundedRect: r, cornerWidth: min(radius, r.width / 2), cornerHeight: min(radius, r.height / 2),
+                       transform: nil)
             }
+            // Tampa aberta, de pé atrás dos sticks (vê-se o lado de dentro).
+            ctx.setLineWidth(1.1)
+            ctx.addPath(round(CGRect(x: 4.75, y: 11.05, width: 8.5, height: 5.6), 0.9))
+            ctx.strokePath()
+            // Três sticks a sair do maço, com uma folga transparente à volta.
+            let sticks = [5.5, 8.15, 10.8].map { CGRect(x: $0, y: 10, width: 1.7, height: 5) }
+            ctx.setBlendMode(.clear)
+            for r in sticks { ctx.addPath(round(r.insetBy(dx: -0.6, dy: -0.6), 1.4)) }
             ctx.fillPath()
             ctx.setBlendMode(.normal)
-            for r in sticks {
-                ctx.addPath(CGPath(roundedRect: r, cornerWidth: 0.85, cornerHeight: 0.85, transform: nil))
-            }
+            for r in sticks { ctx.addPath(round(r, 0.85)) }
             ctx.fillPath()
-            // Corpo do maço, com o vinco da aba da frente.
-            ctx.addPath(CGPath(roundedRect: CGRect(x: 3.5, y: 1.5, width: 11, height: 10.1),
-                               cornerWidth: 1.8, cornerHeight: 1.8, transform: nil))
+            // Corpo do maço, com o colarinho interior e a faixa do nome recortados.
+            ctx.addPath(round(CGRect(x: 3.6, y: 0.8, width: 10.8, height: 10.4), 1.6))
             ctx.fillPath()
             ctx.setBlendMode(.clear)
-            ctx.fill(CGRect(x: 3.5, y: 9.15, width: 11, height: 0.9))
+            ctx.fill(CGRect(x: 3.6, y: 8.6, width: 10.8, height: 0.8))
+            ctx.addPath(round(CGRect(x: 6.5, y: 4.2, width: 5, height: 1.2), 0.6))
+            ctx.fillPath()
             if alert {
                 // Ponto de aviso no canto, recortado do maço.
-                ctx.fillEllipse(in: CGRect(x: 11.2, y: -0.3, width: 7.2, height: 7.2))
+                ctx.fillEllipse(in: CGRect(x: 11.4, y: -0.4, width: 7, height: 7))
                 ctx.setBlendMode(.normal)
-                ctx.fillEllipse(in: CGRect(x: 12.4, y: 0.9, width: 4.8, height: 4.8))
+                ctx.fillEllipse(in: CGRect(x: 12.6, y: 0.8, width: 4.6, height: 4.6))
             }
             ctx.setBlendMode(.normal)
             return true

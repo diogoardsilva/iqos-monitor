@@ -20,6 +20,8 @@ final class AppModel {
     @ObservationIgnored private var saveWork: DispatchWorkItem?
     @ObservationIgnored private(set) var popup = CornerPopup()
     @ObservationIgnored private var updateTimer: Timer?
+    @ObservationIgnored private var detectTimer: Timer?
+    @ObservationIgnored private var detecting = false
 
     init(demo: Bool) {
         self.demo = demo
@@ -33,6 +35,12 @@ final class AppModel {
         }
         Notifier.shared.setUp()
         for d in settings.devices { connect(d.id) }
+        if !demo {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in self?.autoScan() }
+            detectTimer = Timer.scheduledTimer(withTimeInterval: 120, repeats: true) { [weak self] _ in
+                self?.autoScan()
+            }
+        }
         if !demo {
             DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in self?.checkUpdates() }
             updateTimer = Timer.scheduledTimer(withTimeInterval: 6 * 3600, repeats: true) { [weak self] _ in
@@ -82,6 +90,32 @@ final class AppModel {
             connect(f.id)
         }
         scheduleSave()
+    }
+
+    /// Encontra IQOS sozinha: os que o Mac já tem ligados e os que estão por perto.
+    /// Os conhecidos já se ligam sozinhos ao abrir a app e voltam a ligar-se quando caem.
+    func autoScan() {
+        guard settings.autoDetect, !demo, !detecting, !Bluetooth.shared.isScanning else { return }
+        detecting = true
+        Bluetooth.shared.whenReady { [weak self] in
+            guard let self else { return }
+            Bluetooth.shared.connectedIqos().forEach { self.autoAdd($0) }
+            // Só os que estão mesmo ao pé, para não apanhar o IQOS de quem passa.
+            let token = Bluetooth.shared.startScan { [weak self] f in
+                if f.rssi > -70 { self?.autoAdd(f) }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
+                Bluetooth.shared.stopScan(token)
+                self?.detecting = false
+            }
+        }
+    }
+
+    private func autoAdd(_ f: FoundDevice) {
+        guard device(f.id) == nil else { return }
+        add([f])
+        Notifier.shared.post(Alert(kind: .charged, title: "IQOS encontrado",
+                                   message: "\(f.name) foi adicionado e está a ligar-se."))
     }
 
     func addSimulated() {

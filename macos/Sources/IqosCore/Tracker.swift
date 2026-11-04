@@ -264,12 +264,14 @@ public struct Settings: Codable, Equatable, Sendable {
     public var notifyStickEnd = true
     public var autoUpdate = true
     public var showPopup = true
+    /// Mac: procura IQOS por perto e adiciona-os sozinha.
+    public var autoDetect = true
     public var devices: [DeviceState] = []
 
     enum CodingKeys: String, CodingKey {
         case lowBatteryPct = "low_battery_pct", pollSeconds = "poll_seconds"
         case notifyStickEnd = "notify_stick_end", autoUpdate = "auto_update"
-        case showPopup = "show_popup", devices
+        case showPopup = "show_popup", autoDetect = "auto_detect", devices
     }
 
     public init() {}
@@ -281,6 +283,7 @@ public struct Settings: Codable, Equatable, Sendable {
         notifyStickEnd = try c.decodeIfPresent(Bool.self, forKey: .notifyStickEnd) ?? true
         autoUpdate = try c.decodeIfPresent(Bool.self, forKey: .autoUpdate) ?? true
         showPopup = try c.decodeIfPresent(Bool.self, forKey: .showPopup) ?? true
+        autoDetect = try c.decodeIfPresent(Bool.self, forKey: .autoDetect) ?? true
         devices = try c.decodeIfPresent([DeviceState].self, forKey: .devices) ?? []
     }
 }
