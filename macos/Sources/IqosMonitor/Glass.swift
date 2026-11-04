@@ -18,13 +18,17 @@ struct ModuleBackground: View {
     @Environment(\.colorSchemeContrast) private var contrast
 
     var body: some View {
-        RoundedRectangle(cornerRadius: 14, style: .continuous)
-            .fill(Color.primary.opacity(contrast == .increased ? 0.12 : 0.06))
+        let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
+        shape
+            .fill(Color.primary.opacity(contrast == .increased ? 0.12 : 0.05))
             .overlay {
-                if contrast == .increased {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .strokeBorder(Color.primary.opacity(0.35), lineWidth: 1)
-                }
+                // Aresta com luz de cima, para o módulo assentar no vidro do painel.
+                shape.strokeBorder(
+                    contrast == .increased
+                        ? AnyShapeStyle(Color.primary.opacity(0.35))
+                        : AnyShapeStyle(LinearGradient(colors: [.white.opacity(0.28), .white.opacity(0.04)],
+                                                       startPoint: .top, endPoint: .bottom)),
+                    lineWidth: contrast == .increased ? 1 : 0.7)
             }
     }
 }
@@ -52,6 +56,19 @@ struct MenuRowStyle: ButtonStyle {
                         .fill(Color.primary.opacity(configuration.isPressed ? 0.16 : hovering && enabled ? 0.09 : 0))
                 )
                 .onHover { hovering = $0 }
+        }
+    }
+}
+
+extension View {
+    /// Botão redondo de vidro para os controlos do painel (+, ⋯). Os controlos são
+    /// camada funcional, por isso levam vidro interativo no macOS 26.
+    @ViewBuilder
+    func glassControl() -> some View {
+        if #available(macOS 26.0, *) {
+            self.buttonStyle(.glass).buttonBorderShape(.circle)
+        } else {
+            self.buttonStyle(.borderless)
         }
     }
 }

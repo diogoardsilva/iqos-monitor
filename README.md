@@ -39,7 +39,17 @@ O desenho segue as Human Interface Guidelines: o vidro fica só na camada que fl
 
 Os dados ficam em `~/Library/Application Support/IqosMonitor/`. O formato do `state.json` é o mesmo do Windows.
 
-No Mac a app avisa quando há uma versão nova e abre a página da release, mas não se substitui sozinha.
+No Mac a app também se atualiza sozinha: procura a release mais recente ao abrir e a cada 6 horas, descarrega `IqosMonitor-macOS.zip`, confirma o SHA-256, troca o `IqosMonitor.app` e volta a abrir-se. Só funciona com a app numa pasta onde se pode escrever (Aplicações serve). Como a app não está assinada por um programador, o macOS pode voltar a pedir o acesso ao Bluetooth depois de uma atualização.
+
+### Publicar uma versão para Mac
+
+Os Macs do GitHub Actions nem sempre estão disponíveis, por isso a versão do Mac publica-se a partir do teu Mac, depois de criares a release (ou a tag) como de costume:
+
+```
+brew install gh && gh auth login   # só da primeira vez
+cd macos
+./publish.sh v0.2.0
+```
 
 ### Compilar
 

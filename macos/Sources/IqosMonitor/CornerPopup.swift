@@ -9,7 +9,7 @@ import SwiftUI
 final class CornerPopup {
     private var panel: NSPanel?
     private var hideWork: DispatchWorkItem?
-    private let size = NSSize(width: 380, height: 196)
+    private let size = NSSize(width: 360, height: 136)  // tamanho de uma notificação
     static let showSeconds = 6.5
 
     func show(_ d: DeviceState, mode: HolderAnimation.Mode) {
@@ -20,16 +20,19 @@ final class CornerPopup {
         host.frame = NSRect(origin: .zero, size: size)
         if #available(macOS 26.0, *) {
             let glass = NSGlassEffectView(frame: host.frame)
-            glass.cornerRadius = 30
+            glass.cornerRadius = 24
+            // Vidro regular com um véu do fundo da janela, como os avisos do sistema:
+            // o texto lê-se bem mesmo sobre um fundo claro ou cheio de cor.
+            glass.tintColor = NSColor.windowBackgroundColor.withAlphaComponent(0.55)
             glass.contentView = host
             panel.contentView = glass
         } else {
             let fx = NSVisualEffectView(frame: host.frame)
-            fx.material = .hudWindow
+            fx.material = .popover
             fx.blendingMode = .behindWindow
             fx.state = .active
             fx.wantsLayer = true
-            fx.layer?.cornerRadius = 26
+            fx.layer?.cornerRadius = 24
             fx.layer?.masksToBounds = true
             host.autoresizingMask = [.width, .height]
             fx.addSubview(host)
@@ -37,7 +40,7 @@ final class CornerPopup {
         }
 
         guard let screen = NSScreen.main?.visibleFrame else { return }
-        let end = NSPoint(x: screen.maxX - size.width - 14, y: screen.maxY - size.height - 10)
+        let end = NSPoint(x: screen.maxX - size.width - 12, y: screen.maxY - size.height - 8)
         if !panel.isVisible {
             panel.alphaValue = 0
             panel.setFrameOrigin(NSPoint(x: end.x + 40, y: end.y))
@@ -86,6 +89,7 @@ struct PopupView: View {
     var mode: HolderAnimation.Mode
     var start: Date
     var onClose: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     static func headline(_ d: DeviceState, _ mode: HolderAnimation.Mode) -> String {
         if d.model.onePiece {
@@ -97,28 +101,31 @@ struct PopupView: View {
 
     var body: some View {
         let head = Self.headline(device, mode)
-        HStack(spacing: 14) {
+        HStack(spacing: 12) {
             TimelineView(.animation) { tl in
                 let elapsed = tl.date.timeIntervalSince(start) - 0.25
                 let duration = mode == .back ? 0.9 : 2.2
-                let t = min(max(elapsed / duration, 0), 1)
+                let t = reduceMotion ? 1 : min(max(elapsed / duration, 0), 1)
                 Canvas { ctx, size in
-                    HolderAnimation.paint(ctx, area: CGRect(origin: .zero, size: size), t: t,
-                                          model: device.model, mode: mode)
+                    // A animação foi desenhada numa área de 120 × 174; reduz para caber.
+                    let k = min(size.height / 174, size.width / 120)
+                    var c = ctx
+                    c.scaleBy(x: k, y: k)
+                    HolderAnimation.paint(c, area: CGRect(x: 0, y: 0, width: size.width / k, height: size.height / k),
+                                          t: t, model: device.model, mode: mode)
                 }
             }
-            .frame(width: 120)
-            .padding(.vertical, 12)
+            .frame(width: 78)
+            .padding(.vertical, 8)
 
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(device.alias)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 Text(head)
-                    .font(.title.weight(.semibold))
+                    .font(.title3.weight(.semibold))
                     .foregroundStyle(head == "Pronto" ? Color.green : Color.primary)
-                    .contentTransition(.opacity)
-                Spacer().frame(height: 6)
+                    .padding(.bottom, 4)
                 if device.model.onePiece {
                     BatteryRow(label: "Bateria", pct: device.chargerPct)
                     if let rem = device.sticksRemaining {
@@ -133,8 +140,9 @@ struct PopupView: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 18)
-        .frame(width: 380, height: 196)
+        .padding(.leading, 12)
+        .padding(.trailing, 16)
+        .frame(width: 360, height: 136)
         .contentShape(Rectangle())
         .onTapGesture(perform: onClose)
         .accessibilityElement(children: .combine)
@@ -152,7 +160,7 @@ struct BatteryRow: View {
             Text(label)
                 .font(.callout)
                 .foregroundStyle(.secondary)
-                .frame(width: 80, alignment: .leading)
+                .frame(width: 76, alignment: .leading)
             HStack(spacing: 1.5) {
                 ZStack(alignment: .leading) {
                     RoundedRectangle(cornerRadius: 4, style: .continuous)
@@ -164,7 +172,7 @@ struct BatteryRow: View {
                             .padding(2)
                     }
                 }
-                .frame(width: 54, height: 14)
+                .frame(width: 44, height: 12)
                 RoundedRectangle(cornerRadius: 1)
                     .fill(.secondary)
                     .frame(width: 2.5, height: 5)

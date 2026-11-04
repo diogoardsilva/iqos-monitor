@@ -67,7 +67,8 @@ jobs:
         run: |
           # Espera que a release exista (é criada pelo job do Windows ou na página do GitHub).
           for i in $(seq 1 60); do gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 && break; sleep 20; done
-          gh release upload "$GITHUB_REF_NAME" build/IqosMonitor-macOS.zip --clobber
+          shasum -a 256 build/IqosMonitor-macOS.zip | cut -d' ' -f1 > build/IqosMonitor-macOS.zip.sha256
+          gh release upload "$GITHUB_REF_NAME" build/IqosMonitor-macOS.zip build/IqosMonitor-macOS.zip.sha256 --clobber
 
   release:
     # Cada tag vX.Y.Z gera o .exe e publica a release que a app instala sozinha.

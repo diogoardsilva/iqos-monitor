@@ -12,6 +12,7 @@ final class AppModel {
     /// Dispositivos com ligação ativa (para o menu Ligar/Desligar).
     private(set) var linked: Set<String> = []
     var updateAvailable: Release?
+    private(set) var updating = false
     let demo: Bool
 
     @ObservationIgnored private var links: [String: DeviceLink] = [:]
@@ -164,33 +165,62 @@ final class AppModel {
 
     func checkUpdates(manual: Bool = false) {
         Task { @MainActor [weak self] in
-            let rel = try? await Updates.latest()
+            let rel: Release?
+            do { rel = try await Updates.latest() } catch {
+                if manual {
+                    Notifier.shared.post(Alert(kind: .charged, title: "Atualizações",
+                                               message: "Não foi possível procurar: \(error.localizedDescription)"))
+                }
+                return
+            }
             guard let self else { return }
             self.updateAvailable = rel
-            if manual {
-                if let rel {
-                    NSWorkspace.shared.open(rel.pageURL)
-                } else {
+            guard let rel else {
+                if manual {
                     Notifier.shared.post(Alert(kind: .charged, title: "Atualizações",
                                                message: "Já tem a versão mais recente (\(Updates.currentVersion))."))
                 }
-            } else if let rel, self.settings.autoUpdate {
+                return
+            }
+            if !Updates.canSelfUpdate {
+                if manual { NSWorkspace.shared.open(rel.pageURL) }
+            } else if self.settings.autoUpdate {
+                self.installUpdate(rel)
+            } else {
                 Notifier.shared.post(Alert(kind: .charged, title: "Atualização disponível",
-                                           message: "Versão \(rel.version). Abra o IQOS na barra de menus para a descarregar."))
+                                           message: "Versão \(rel.version). Abra o IQOS na barra de menus para a instalar."))
             }
         }
     }
 
-    var menuBarSymbol: String {
-        let pcts = settings.devices.compactMap(\.chargerPct)
-        guard let low = pcts.min() else { return "dot.radiowaves.left.and.right" }
-        switch low {
-        case ..<13: return "battery.0percent"
-        case ..<38: return "battery.25percent"
-        case ..<63: return "battery.50percent"
-        case ..<88: return "battery.75percent"
-        default: return "battery.100percent"
+    /// Descarrega e instala a versão nova (como no Windows) e reabre a app.
+    func installUpdate(_ rel: Release) {
+        guard !updating else { return }
+        updating = true
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            for link in self.links.values { link.stop() }  // liberta o Bluetooth antes de reiniciar
+            self.save()
+            do {
+                try await Updates.install(rel)
+            } catch {
+                self.updating = false
+                for d in self.settings.devices where self.linked.contains(d.id) { self.reconnect(d.id) }
+                Notifier.shared.post(Alert(kind: .charged, title: "Atualizações",
+                                           message: "Não foi possível atualizar: \(error.localizedDescription)"))
+            }
         }
+    }
+
+    private func reconnect(_ id: String) {
+        links[id] = nil
+        linked.remove(id)
+        connect(id)
+    }
+
+    /// Algum IQOS com a bateria abaixo do limite (mostra um ponto no ícone da barra).
+    var anyLowBattery: Bool {
+        settings.devices.contains { ($0.chargerPct ?? 100) <= settings.lowBatteryPct && !$0.charging }
     }
 }
 

@@ -1,5 +1,5 @@
-// Painel da barra de menus. É a app toda: abre-se ao clicar no ícone, por cima
-// de tudo, no vidro do sistema (como o Centro de Controlo).
+// Conteúdo do painel da barra de menus (ver StatusPanel.swift). É a app toda:
+// abre-se ao clicar no ícone, por cima de tudo, no vidro do sistema.
 //
 // Desenho: um módulo por IQOS, com anéis como os do widget Baterias e o
 // aparelho desenhado dentro de cada anel. Os comandos da app ficam em baixo,
@@ -14,7 +14,7 @@ struct MenuPanel: View {
     @State private var scanning = false
     @State private var renaming: String?
     @State private var removing: String?
-    @Environment(\.openSettings) private var openSettings
+    var openSettings: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -38,8 +38,6 @@ struct MenuPanel: View {
         }
         .padding(12)
         .frame(width: 340)
-        .animation(.snappy(duration: 0.25), value: scanning)
-        .animation(.snappy(duration: 0.25), value: model.settings.devices.map(\.id))
     }
 
     private var header: some View {
@@ -53,10 +51,10 @@ struct MenuPanel: View {
             if !scanning {
                 Button(action: add) {
                     Image(systemName: "plus")
-                        .frame(width: 22, height: 22)
-                        .contentShape(Rectangle())
+                        .font(.system(size: 12, weight: .semibold))
+                        .frame(width: 18, height: 18)
                 }
-                .buttonStyle(.borderless)
+                .glassControl()
                 .help("Adicionar IQOS")
                 .accessibilityLabel("Adicionar IQOS")
             }
@@ -89,11 +87,20 @@ struct MenuPanel: View {
     private var footer: some View {
         VStack(spacing: 0) {
             if let rel = model.updateAvailable {
-                Button("Descarregar a versão \(rel.version)…") { NSWorkspace.shared.open(rel.pageURL) }
-                    .buttonStyle(MenuRowStyle())
+                Button {
+                    model.installUpdate(rel)
+                } label: {
+                    HStack {
+                        Text(model.updating ? "A atualizar para a versão \(rel.version)…"
+                             : "Atualizar para a versão \(rel.version)")
+                        Spacer()
+                        if model.updating { ProgressView().controlSize(.small) }
+                    }
+                }
+                .buttonStyle(MenuRowStyle())
+                .disabled(model.updating)
             }
             Button {
-                NSApp.activate()
                 openSettings()
             } label: {
                 HStack {
@@ -211,12 +218,14 @@ struct DeviceModule: View {
         Menu {
             menuItems(d)
         } label: {
-            Image(systemName: "ellipsis.circle")
+            Image(systemName: "ellipsis")
+                .font(.system(size: 12, weight: .semibold))
+                .frame(width: 16, height: 16)
         }
-        .menuStyle(.borderlessButton)
+        .menuStyle(.button)
         .menuIndicator(.hidden)
+        .glassControl()
         .fixedSize()
-        .foregroundStyle(.secondary)
         .accessibilityLabel("Ações para \(d.alias)")
     }
 
@@ -397,10 +406,11 @@ struct SettingsView: View {
                 Picker("Ler o contador a cada", selection: $model.settings.pollSeconds) {
                     ForEach(options([10, 20, 30, 60, 120], model.settings.pollSeconds), id: \.self) { Text("\($0) s").tag($0) }
                 }
-                Toggle("Avisar quando houver versão nova", isOn: $model.settings.autoUpdate)
+                Toggle("Instalar atualizações automaticamente", isOn: $model.settings.autoUpdate)
             }
             Section {
                 LabeledContent("Versão", value: Updates.currentVersion)
+                Button("Procurar atualizações") { model.checkUpdates(manual: true) }
             }
         }
         .formStyle(.grouped)
