@@ -21,6 +21,7 @@ MAX_STICKS_PER_UPDATE = 5
 class Alert:
     # "stick_end" | "holder_charge" | "low_battery" | "charged" avisam no Windows;
     # "holder_out" | "holder_in" só abrem a janela do canto.
+    # "pack_low" | "stock_low" | "stock_empty" vêm do stock de tabaco (stock.py).
     kind: str
     title: str
     message: str
@@ -209,6 +210,11 @@ class DeviceState:
         return []
 
 
+def _new_stock():
+    from .stock import Stock  # importado aqui: stock.py usa Alert deste módulo
+    return Stock()
+
+
 @dataclass
 class Settings:
     low_battery_pct: int = 20
@@ -217,3 +223,4 @@ class Settings:
     auto_update: bool = True
     show_popup: bool = True
     devices: list[DeviceState] = field(default_factory=list)
+    stock: "Stock" = field(default_factory=_new_stock)  # noqa: F821

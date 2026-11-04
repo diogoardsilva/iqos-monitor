@@ -17,6 +17,8 @@ public struct Alert: Equatable, Sendable {
         // Avisam com notificação:
         case stickEnd = "stick_end", holderCharge = "holder_charge"
         case lowBattery = "low_battery", charged
+        // Stock de tabaco (Stock.swift):
+        case packLow = "pack_low", stockLow = "stock_low", stockEmpty = "stock_empty"
         // Só abrem a janela do canto:
         case holderOut = "holder_out", holderIn = "holder_in"
     }
@@ -265,11 +267,12 @@ public struct Settings: Codable, Equatable, Sendable {
     public var autoUpdate = true
     public var showPopup = true
     public var devices: [DeviceState] = []
+    public var stock = Stock()
 
     enum CodingKeys: String, CodingKey {
         case lowBatteryPct = "low_battery_pct", pollSeconds = "poll_seconds"
         case notifyStickEnd = "notify_stick_end", autoUpdate = "auto_update"
-        case showPopup = "show_popup", devices
+        case showPopup = "show_popup", devices, stock
     }
 
     public init() {}
@@ -282,6 +285,7 @@ public struct Settings: Codable, Equatable, Sendable {
         autoUpdate = try c.decodeIfPresent(Bool.self, forKey: .autoUpdate) ?? true
         showPopup = try c.decodeIfPresent(Bool.self, forKey: .showPopup) ?? true
         devices = try c.decodeIfPresent([DeviceState].self, forKey: .devices) ?? []
+        stock = try c.decodeIfPresent(Stock.self, forKey: .stock) ?? Stock()
     }
 }
 

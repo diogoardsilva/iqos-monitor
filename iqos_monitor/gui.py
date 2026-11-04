@@ -234,6 +234,110 @@ class ScanDialog(QDialog):
                 if self.list.item(i).checkState() == Qt.Checked]
 
 
+class StockCard(QFrame):
+    """Cartão do tabaco: quanto resta, o maço aberto e a compra."""
+
+    def __init__(self, app: "MainWindow") -> None:
+        super().__init__()
+        self.app = app
+        self.setObjectName("card")
+        shadow = QGraphicsDropShadowEffect(self, blurRadius=18, xOffset=0, yOffset=2)
+        shadow.setColor(QColor(0, 0, 0, 28))
+        self.setGraphicsEffect(shadow)
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(18, 14, 12, 16)
+        lay.setSpacing(10)
+
+        head = QHBoxLayout()
+        names = QVBoxLayout()
+        names.setSpacing(0)
+        title = QLabel("Tabaco")
+        title.setFont(font(13, QFont.DemiBold))
+        self.subtitle = secondary()
+        names.addWidget(title)
+        names.addWidget(self.subtitle)
+        head.addLayout(names)
+        head.addStretch()
+        self.buy = QPushButton("Comprei…")
+        self.buy.setObjectName("primary")
+        self.buy.clicked.connect(app.buy_stock)
+        head.addWidget(self.buy, 0, Qt.AlignTop)
+        self.more = QPushButton("⋯")
+        self.more.setObjectName("more")
+        self.more.setAccessibleName("Mais ações do tabaco")
+        self.menu = QMenu(self)
+        self.menu.addAction("Corrigir quanto tenho…", app.correct_stock)
+        self.a_stop = self.menu.addAction("Deixar de contar", app.stop_stock)
+        self.more.setMenu(self.menu)
+        head.addWidget(self.more, 0, Qt.AlignTop)
+        lay.addLayout(head)
+
+        self.stats_w = QWidget()
+        stats = QHBoxLayout(self.stats_w)
+        stats.setContentsMargins(0, 0, 0, 0)
+        self.s_open = Stat("no maço aberto")
+        self.s_packs = Stat("maços por abrir")
+        self.s_days = Stat("dias")
+        for w in (self.s_open, self.s_packs, self.s_days):
+            stats.addWidget(w)
+        lay.addWidget(self.stats_w)
+        self.refresh()
+
+    def contextMenuEvent(self, ev) -> None:
+        self.menu.exec(ev.globalPos())
+
+    def refresh(self) -> None:
+        st = self.app.settings.stock
+        self.stats_w.setVisible(st.tracking)
+        self.a_stop.setEnabled(st.tracking)
+        if not st.tracking:
+            self.subtitle.setText("Diga quanto tabaco comprou e a app avisa quando estiver a acabar.")
+            self.subtitle.setWordWrap(True)
+            return
+        self.subtitle.setText(f"Resta {st.describe()}")
+        self.s_open.set(str(st.open_pack_left))
+        self.s_packs.set(str(st.closed_packs))
+        days = st.days_left(datetime.now().date())
+        self.s_days.set("—" if days is None else f"~{days}")
+
+
+class StockDialog(QDialog):
+    """Comprei tabaco (somar) ou corrigir quanto tenho (substituir)."""
+
+    def __init__(self, parent: "MainWindow", correct: bool = False) -> None:
+        super().__init__(parent)
+        st = parent.settings.stock
+        self.setWindowTitle("Corrigir o tabaco" if correct else "Comprei tabaco")
+        form = QFormLayout(self)
+        form.setContentsMargins(20, 18, 20, 18)
+        form.setVerticalSpacing(10)
+        self.cartons, self.packs, self.sticks = QSpinBox(), QSpinBox(), QSpinBox()
+        self.cartons.setRange(0, 50)
+        self.packs.setRange(0, 99)
+        self.sticks.setRange(0, st.pack_size - 1)
+        if correct and st.tracking:
+            c, rest = divmod(st.sticks_left, st.carton_size)
+            p, loose = divmod(rest, st.pack_size)
+            self.cartons.setValue(c)
+            self.packs.setValue(p)
+            self.sticks.setValue(loose)
+        elif not correct:
+            self.cartons.setValue(1)
+        form.addRow(secondary(
+            f"1 maço = {st.pack_size} sticks · 1 volume = {st.packs_per_carton} maços", 9))
+        form.addRow("Volumes", self.cartons)
+        form.addRow("Maços", self.packs)
+        if correct:
+            form.addRow("Sticks soltos", self.sticks)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.button(QDialogButtonBox.Ok).setText("Guardar" if correct else "Adicionar")
+        bb.button(QDialogButtonBox.Ok).setObjectName("primary")
+        bb.button(QDialogButtonBox.Cancel).setText("Cancelar")
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        form.addRow(bb)
+
+
 class SettingsDialog(QDialog):
     def __init__(self, parent: "MainWindow") -> None:
         super().__init__(parent)
@@ -261,6 +365,34 @@ class SettingsDialog(QDialog):
         form.addRow(self.notify)
         form.addRow(self.popup)
         form.addRow(self.auto)
+
+        st = s.stock
+        tab = QLabel("Tabaco")
+        tab.setFont(font(11, QFont.DemiBold))
+        form.addRow(tab)
+        self.pack_size, self.per_carton = QSpinBox(), QSpinBox()
+        self.pack_warn, self.low_packs = QSpinBox(), QSpinBox()
+        self.pack_size.setRange(1, 40)
+        self.pack_size.setSuffix(" sticks")
+        self.pack_size.setValue(st.pack_size)
+        self.per_carton.setRange(1, 20)
+        self.per_carton.setSuffix(" maços")
+        self.per_carton.setValue(st.packs_per_carton)
+        self.pack_warn.setRange(0, 10)
+        self.pack_warn.setSuffix(" sticks")
+        self.pack_warn.setSpecialValueText("quando acaba")
+        self.pack_warn.setValue(st.pack_warn_sticks)
+        self.low_packs.setRange(0, 100)
+        self.low_packs.setSuffix(" maços")
+        self.low_packs.setSpecialValueText("nunca")
+        self.low_packs.setValue(st.low_stock_packs)
+        self.stock_notify = QCheckBox("Avisar quando o tabaco estiver a acabar")
+        self.stock_notify.setChecked(st.notify)
+        form.addRow("Cada maço tem", self.pack_size)
+        form.addRow("Cada volume tem", self.per_carton)
+        form.addRow("Avisar o maço quando restam", self.pack_warn)
+        form.addRow("Avisar o stock quando restam", self.low_packs)
+        form.addRow(self.stock_notify)
         form.addRow(secondary(f"IQOS Monitor {__version__}"))
         bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         bb.button(QDialogButtonBox.Ok).setText("Guardar")
@@ -329,6 +461,8 @@ class MainWindow(QMainWindow):
         for w in (e1, e2):
             w.setAlignment(Qt.AlignCenter)
             el.addWidget(w)
+        self.stock_card = StockCard(self)
+        self.list_l.addWidget(self.stock_card)
         self.list_l.addWidget(self.empty)
         self.list_l.addStretch()
         scroll = QScrollArea()
@@ -451,17 +585,59 @@ class MainWindow(QMainWindow):
             self.settings.notify_stick_end = dlg.notify.isChecked()
             self.settings.auto_update = dlg.auto.isChecked()
             self.settings.show_popup = dlg.popup.isChecked()
+            st = self.settings.stock
+            st.pack_size = dlg.pack_size.value()
+            st.packs_per_carton = dlg.per_carton.value()
+            st.pack_warn_sticks = dlg.pack_warn.value()
+            st.low_stock_packs = dlg.low_packs.value()
+            st.notify = dlg.stock_notify.isChecked()
+            self.stock_card.refresh()
             for c in self.conns.values():
                 c.poll_seconds = self.settings.poll_seconds
             self.schedule_save()
 
+    # ---- tabaco ------------------------------------------------------------
+
+    def buy_stock(self) -> None:
+        dlg = StockDialog(self)
+        if dlg.exec() == QDialog.Accepted:
+            self.settings.stock.add(dlg.cartons.value(), dlg.packs.value())
+            self.stock_card.refresh()
+            self.schedule_save()
+
+    def correct_stock(self) -> None:
+        dlg = StockDialog(self, correct=True)
+        if dlg.exec() == QDialog.Accepted:
+            st = self.settings.stock
+            st.set(dlg.cartons.value() * st.carton_size + dlg.packs.value() * st.pack_size
+                   + dlg.sticks.value())
+            self.stock_card.refresh()
+            self.schedule_save()
+
+    def stop_stock(self) -> None:
+        self.settings.stock.stop()
+        self.stock_card.refresh()
+        self.schedule_save()
+
     # ---- callbacks BLE -----------------------------------------------------
 
     def _on_battery(self, d: DeviceState, b) -> None:
-        self._handle(d, d.on_battery(b, datetime.now(), self.settings.low_battery_pct))
+        before = d.total_sticks_seen
+        alerts = d.on_battery(b, datetime.now(), self.settings.low_battery_pct)
+        self._handle(d, alerts + self._consume(d.total_sticks_seen - before))
 
     def _on_telemetry(self, d: DeviceState, t) -> None:
-        self._handle(d, d.on_telemetry(t, datetime.now(), self.settings.low_battery_pct))
+        before = d.total_sticks_seen
+        alerts = d.on_telemetry(t, datetime.now(), self.settings.low_battery_pct)
+        self._handle(d, alerts + self._consume(d.total_sticks_seen - before))
+
+    def _consume(self, n: int) -> list[Alert]:
+        """Cada cigarro contado sai do stock de tabaco."""
+        if n <= 0:
+            return []
+        alerts = self.settings.stock.consume(n)
+        self.stock_card.refresh()
+        return alerts
 
     def _on_status(self, d: DeviceState, connected: bool, text: str) -> None:
         # Nos ONE não há holder: o IQOS liga-se quando é ativado, mostra a janela aí.
@@ -483,7 +659,8 @@ class MainWindow(QMainWindow):
         self.schedule_save()
 
     def notify(self, a: Alert) -> None:
-        icon = (QSystemTrayIcon.Warning if a.kind in ("low_battery", "holder_charge")
+        icon = (QSystemTrayIcon.Warning
+                if a.kind in ("low_battery", "holder_charge", "stock_low", "stock_empty")
                 else QSystemTrayIcon.Information)
         self.tray.showMessage(a.title, a.message, icon, 8000)
         QApplication.beep()

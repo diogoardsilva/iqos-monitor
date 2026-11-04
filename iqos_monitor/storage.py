@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 
+from .stock import Stock
 from .tracker import DeviceState, Settings
 
 
@@ -27,6 +28,7 @@ def load(path: Path | None = None) -> Settings:
         auto_update=bool(data.get("auto_update", True)),
         show_popup=bool(data.get("show_popup", True)),
     )
+    s.stock = Stock.from_dict(data.get("stock"))
     s.devices = [DeviceState.from_dict(d) for d in data.get("devices", []) if "address" in d]
     return s
 
@@ -40,6 +42,7 @@ def save(s: Settings, path: Path | None = None) -> None:
         "notify_stick_end": s.notify_stick_end,
         "auto_update": s.auto_update,
         "show_popup": s.show_popup,
+        "stock": s.stock.to_dict(),
         "devices": [d.to_dict() for d in s.devices],
     }
     tmp = path.with_suffix(".tmp")

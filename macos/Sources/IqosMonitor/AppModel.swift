@@ -31,6 +31,9 @@ final class AppModel {
                 DeviceState(address: "SIM-02", name: "IQOS ILUMA i ONE", alias: "IQOS do carro"),
             ]
         }
+        if demo && !settings.stock.tracking {
+            settings.stock.add(cartons: 1, packs: 1, sticks: 3)
+        }
         Notifier.shared.setUp()
         for d in settings.devices { connect(d.id) }
         if !demo {
@@ -110,6 +113,26 @@ final class AppModel {
         scheduleSave()
     }
 
+    // MARK: Tabaco
+
+    /// Comprei tabaco: soma ao que já havia.
+    func buyStock(cartons: Int, packs: Int) {
+        settings.stock.add(cartons: cartons, packs: packs)
+        scheduleSave()
+    }
+
+    /// Corrigir: tenho exatamente isto.
+    func setStock(cartons: Int, packs: Int, sticks: Int) {
+        let st = settings.stock
+        settings.stock.set(cartons * st.cartonSize + packs * st.packSize + sticks)
+        scheduleSave()
+    }
+
+    func stopStock() {
+        settings.stock.stop()
+        scheduleSave()
+    }
+
     func applySettings() {
         for l in links.values { l.pollSeconds = Double(settings.pollSeconds) }
         scheduleSave()
@@ -121,8 +144,11 @@ final class AppModel {
         guard let i = index(id) else { return }
         let low = settings.lowBatteryPct
         var d = settings.devices[i]
-        let alerts = f(&d, low)
+        let before = d.totalSticksSeen
+        var alerts = f(&d, low)
         settings.devices[i] = d
+        // Cada cigarro contado sai do stock de tabaco.
+        alerts += settings.stock.consume(d.totalSticksSeen - before)
         for a in alerts {
             switch a.kind {
             case .holderOut, .holderIn:
@@ -246,8 +272,9 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         let content = UNMutableNotificationContent()
         content.title = a.title
         content.body = a.message
-        content.sound = a.kind == .stickEnd || a.kind == .lowBattery || a.kind == .holderCharge ? .default : nil
-        if a.kind == .lowBattery || a.kind == .holderCharge {
+        let loud: Set<Alert.Kind> = [.stickEnd, .lowBattery, .holderCharge, .packLow, .stockLow, .stockEmpty]
+        content.sound = loud.contains(a.kind) ? .default : nil
+        if a.kind == .lowBattery || a.kind == .holderCharge || a.kind == .stockLow || a.kind == .stockEmpty {
             content.interruptionLevel = .timeSensitive
         }
         UNUserNotificationCenter.current().add(

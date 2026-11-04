@@ -33,6 +33,9 @@ struct MenuPanel: View {
                     DeviceModule(model: model, device: d, renaming: $renaming, removing: $removing)
                 }
             }
+            if !scanning && (!model.settings.devices.isEmpty || model.settings.stock.tracking) {
+                StockModule(model: model)
+            }
             Divider().padding(.horizontal, 4)
             footer
         }
@@ -402,6 +405,25 @@ struct SettingsView: View {
                     ForEach(options([10, 15, 20, 25, 30, 40], model.settings.lowBatteryPct), id: \.self) { Text("\($0) %").tag($0) }
                 }
             }
+            Section("Tabaco") {
+                Toggle("Avisar quando o tabaco estiver a acabar", isOn: $model.settings.stock.notify)
+                Stepper("Cada maço tem \(model.settings.stock.packSize) sticks",
+                        value: $model.settings.stock.packSize, in: 1...40)
+                Stepper("Cada volume tem \(model.settings.stock.packsPerCarton) maços",
+                        value: $model.settings.stock.packsPerCarton, in: 1...20)
+                Picker("Avisar o maço quando restam", selection: $model.settings.stock.packWarnSticks) {
+                    Text("quando acaba").tag(0)
+                    ForEach(options([1, 2, 3, 4, 5], model.settings.stock.packWarnSticks).filter { $0 > 0 },
+                            id: \.self) { Text("\($0) \($0 == 1 ? "stick" : "sticks")").tag($0) }
+                }
+                Picker("Avisar o stock quando resta", selection: $model.settings.stock.lowStockPacks) {
+                    Text("nunca").tag(0)
+                    ForEach(options([1, 2, 5, 10, 20], model.settings.stock.lowStockPacks).filter { $0 > 0 },
+                            id: \.self) { n in
+                        Text(packsLabel(n)).tag(n)
+                    }
+                }
+            }
             Section("Ligação") {
                 Picker("Ler o contador a cada", selection: $model.settings.pollSeconds) {
                     ForEach(options([10, 20, 30, 60, 120], model.settings.pollSeconds), id: \.self) { Text("\($0) s").tag($0) }
@@ -421,6 +443,17 @@ struct SettingsView: View {
         .onChange(of: model.settings.notifyStickEnd) { model.scheduleSave() }
         .onChange(of: model.settings.showPopup) { model.scheduleSave() }
         .onChange(of: model.settings.autoUpdate) { model.scheduleSave() }
+        .onChange(of: model.settings.stock) { model.scheduleSave() }
+    }
+
+    /// "1 volume" quando dá certo, senão "5 maços".
+    private func packsLabel(_ n: Int) -> String {
+        let per = model.settings.stock.packsPerCarton
+        if per > 0 && n % per == 0 {
+            let v = n / per
+            return "\(v) \(v == 1 ? "volume" : "volumes")"
+        }
+        return "\(n) \(n == 1 ? "maço" : "maços")"
     }
 
     /// Valores do menu, incluindo o atual se vier de uma versão antiga.

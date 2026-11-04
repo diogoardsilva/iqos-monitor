@@ -6,6 +6,7 @@ App para Windows e macOS que se liga por Bluetooth a um ou mais IQOS ao mesmo te
 - conta os cigarros fumados hoje e desde a última carga;
 - estima quantos cigarros ainda dá para fumar com a carga atual, e aprende o consumo real de cada dispositivo;
 - avisa quando cada cigarro termina, quando o holder tem de voltar ao carregador, quando a bateria está fraca e quando a carga fica completa;
+- conta o tabaco que tem (beta): diz-lhe o que comprou ("3 volumes", "2 maços"), cada cigarro sai do stock e avisa quando o maço aberto está a acabar, quando resta pouco (por omissão 1 volume) e quando acaba. Quantos sticks tem o maço, quantos maços tem o volume e os limites dos avisos mudam-se nas Definições;
 - fica na área de notificação do Windows (ou na barra de menus do Mac) e reconecta-se sozinha;
 - procura atualizações nas releases do GitHub e instala-as sozinha.
 
