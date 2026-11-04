@@ -1,4 +1,5 @@
 // Arranque: IqosMonitor.app [--demo]
+// App só da barra de menus (LSUIElement): sem ícone no Dock nem janela principal.
 
 import AppKit
 import SwiftUI
@@ -6,12 +7,15 @@ import SwiftUI
 final class AppDelegate: NSObject, NSApplicationDelegate {
     var model: AppModel?
 
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        false  // continua a vigiar a partir da barra de menus
-    }
-
     func applicationWillTerminate(_ notification: Notification) {
         model?.save()
+    }
+
+    // A barra de menus pode esconder o ícone; abrir a app outra vez mostra as Definições.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        NSApp.activate()
+        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        return false
     }
 }
 
@@ -23,23 +27,17 @@ struct IqosMonitorApp: App {
     init() {
         let m = AppModel(demo: CommandLine.arguments.contains("--demo"))
         _model = State(initialValue: m)
-        // Executado fora de um .app (swift run): mostra-se como app normal com Dock.
-        NSApplication.shared.setActivationPolicy(.regular)
+        // Fora de um .app (swift run) não há Info.plist com LSUIElement.
+        NSApplication.shared.setActivationPolicy(.accessory)
     }
 
     var body: some Scene {
-        Window("IQOS Monitor", id: "main") {
-            ContentView(model: model)
-                .onAppear { delegate.model = model }
-        }
-        .windowStyle(.hiddenTitleBar)
-        .windowResizability(.contentMinSize)
-        .defaultSize(width: 430, height: 760)
-
         MenuBarExtra {
-            MenuBarPanel(model: model)
+            MenuPanel(model: model)
+                .onAppear { delegate.model = model }
         } label: {
             Image(systemName: model.menuBarSymbol)
+                .accessibilityLabel("IQOS Monitor")
         }
         .menuBarExtraStyle(.window)
 

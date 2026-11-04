@@ -26,6 +26,8 @@
     <string>public.app-category.utilities</string>
     <key>LSMinimumSystemVersion</key>
     <string>14.0</string>
+    <key>LSUIElement</key>
+    <true/>
     <key>NSBluetoothAlwaysUsageDescription</key>
     <string>O IQOS Monitor liga-se aos seus IQOS por Bluetooth para ler a bateria e contar os cigarros.</string>
     <key>NSHighResolutionCapable</key>

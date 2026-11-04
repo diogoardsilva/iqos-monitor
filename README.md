@@ -22,11 +22,14 @@ Os dados ficam em `%APPDATA%\IqosMonitor\` (`state.json` e `iqos-monitor.log`).
 
 ## macOS
 
-A versão para Mac é uma app nativa em SwiftUI, com o visual Liquid Glass do macOS 26 Tahoe (cartões e botões de vidro, tema claro e escuro). Funciona a partir do macOS 14; antes do Tahoe usa materiais translúcidos no lugar do vidro.
+A versão para Mac é uma app nativa em SwiftUI que vive só na barra de menus, sem ícone no Dock. Ao clicar no ícone abre-se um painel no vidro do sistema (Liquid Glass no macOS 26 ou mais recente), como o Centro de Controlo:
 
-- Janela "Os meus IQOS" com anéis de bateria, contagem e estimativa de cada IQOS.
-- Ícone na barra de menus com o estado de todos os IQOS.
-- Avisos no Centro de Notificações e a janela no canto quando tira o holder.
+- um módulo por IQOS, com anéis de bateria no estilo do widget Baterias (o aparelho desenhado ao centro), cigarros restantes e de hoje;
+- adicionar, mudar o nome, repor e remover IQOS sem sair do painel;
+- avisos no Centro de Notificações e a janela no canto quando tira o holder;
+- Definições com "Abrir ao iniciar sessão". Se o ícone ficar escondido, abrir a app outra vez mostra as Definições.
+
+O desenho segue as Human Interface Guidelines: o vidro fica só na camada que flutua (o painel e a janela do canto) e o conteúdo usa preenchimentos neutros, cores do sistema e tipo do sistema, em claro e escuro. Funciona a partir do macOS 14.
 
 ### Instalar
 
@@ -56,9 +59,9 @@ Para o Bluetooth e as notificações use o `.app` gerado pelo `build-app.sh`: o 
 |---|---|
 | `macos/Sources/IqosCore/` | protocolo, contagem e alertas (tradução de `protocol.py` e `tracker.py`) |
 | `macos/Sources/IqosMonitor/Bluetooth.swift` | ligação CoreBluetooth, reconexão e telemetria |
-| `macos/Sources/IqosMonitor/Views.swift` | janela, cartões de vidro, barra de menus e definições |
+| `macos/Sources/IqosMonitor/Views.swift` | painel da barra de menus, anéis de bateria e definições |
 | `macos/Sources/IqosMonitor/CornerPopup.swift` | janela no canto com a animação do holder |
-| `macos/Sources/IqosMonitor/Glass.swift` | Liquid Glass com recurso a materiais no macOS 14/15 |
+| `macos/Sources/IqosMonitor/Glass.swift` | cores e estilos partilhados (fundos dos módulos, linhas de menu) |
 
 Quem mexer nas regras de contagem em `tracker.py` deve fazer a mesma alteração em `macos/Sources/IqosCore/Tracker.swift` (os testes dos dois lados são os mesmos).
 

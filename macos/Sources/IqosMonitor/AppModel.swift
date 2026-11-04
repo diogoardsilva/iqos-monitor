@@ -176,14 +176,14 @@ final class AppModel {
                 }
             } else if let rel, self.settings.autoUpdate {
                 Notifier.shared.post(Alert(kind: .charged, title: "Atualização disponível",
-                                           message: "Versão \(rel.version). Abra o menu ⋯ para a descarregar."))
+                                           message: "Versão \(rel.version). Abra o IQOS na barra de menus para a descarregar."))
             }
         }
     }
 
     var menuBarSymbol: String {
         let pcts = settings.devices.compactMap(\.chargerPct)
-        guard let low = pcts.min() else { return "battery.0percent" }
+        guard let low = pcts.min() else { return "dot.radiowaves.left.and.right" }
         switch low {
         case ..<13: return "battery.0percent"
         case ..<38: return "battery.25percent"

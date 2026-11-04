@@ -1,97 +1,57 @@
-// Liquid Glass: usa as APIs do macOS 26 (glassEffect, GlassEffectContainer,
-// estilos de botão .glass) e recua para materiais translúcidos no macOS 14/15.
+// Cores e pequenos estilos partilhados.
+//
+// Regra da Apple para o Liquid Glass: o vidro é só para a camada funcional que
+// flutua por cima do conteúdo (barras, menus, painéis). O painel da barra de
+// menus e a janela do canto já são vidro do sistema; o que está lá dentro é
+// conteúdo e usa preenchimentos neutros, nunca vidro sobre vidro.
 
-import AppKit
 import SwiftUI
 
-extension View {
-    /// Painel de vidro com cantos contínuos, opcionalmente tingido com a cor do aparelho.
-    @ViewBuilder
-    func glassPanel(cornerRadius: CGFloat = 26, tint: Color? = nil, interactive: Bool = false) -> some View {
-        if #available(macOS 26.0, *) {
-            let base = interactive ? Glass.regular.interactive() : Glass.regular
-            self.glassEffect(tint.map { base.tint($0.opacity(0.18)) } ?? base,
-                             in: .rect(cornerRadius: cornerRadius))
-        } else {
-            self
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-                .background((tint ?? .clear).opacity(0.10),
-                            in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(.white.opacity(0.22), lineWidth: 0.6))
-                .shadow(color: .black.opacity(0.10), radius: 14, y: 6)
-        }
-    }
-
-    /// Botão de vidro (ou de vidro em destaque, para a ação principal).
-    @ViewBuilder
-    func glassButton(prominent: Bool = false) -> some View {
-        if #available(macOS 26.0, *) {
-            if prominent { self.buttonStyle(.glassProminent) } else { self.buttonStyle(.glass) }
-        } else {
-            if prominent { self.buttonStyle(.borderedProminent) } else { self.buttonStyle(.bordered) }
-        }
-    }
-}
-
-/// Agrupa painéis de vidro para se fundirem e animarem juntos (macOS 26).
-struct GlassGroup<Content: View>: View {
-    var spacing: CGFloat = 16
-    @ViewBuilder var content: Content
-
-    var body: some View {
-        if #available(macOS 26.0, *) {
-            GlassEffectContainer(spacing: spacing) { content }
-        } else {
-            content
-        }
-    }
-}
-
-/// Fundo translúcido da janela: desfoca o que está por trás (ambiente de trabalho).
-struct WindowBackdrop: NSViewRepresentable {
-    var material: NSVisualEffectView.Material = .underWindowBackground
-
-    func makeNSView(context: Context) -> NSVisualEffectView {
-        let v = NSVisualEffectView()
-        v.material = material
-        v.blendingMode = .behindWindow
-        v.state = .followsWindowActiveState
-        return v
-    }
-
-    func updateNSView(_ v: NSVisualEffectView, context: Context) {
-        v.material = material
-    }
-}
-
-/// Manchas de cor suaves por trás dos cartões, para o vidro ter o que refratar.
-struct AmbientBackground: View {
-    var colors: [Color]
-    @Environment(\.colorScheme) private var scheme
-
-    var body: some View {
-        GeometryReader { geo in
-            let w = geo.size.width, h = geo.size.height
-            ZStack {
-                WindowBackdrop()
-                ForEach(Array(colors.prefix(4).enumerated()), id: \.offset) { i, c in
-                    let spots: [(CGFloat, CGFloat)] = [(0.15, 0.12), (0.9, 0.38), (0.2, 0.72), (0.85, 0.95)]
-                    Circle()
-                        .fill(c.opacity(scheme == .dark ? 0.45 : 0.35))
-                        .frame(width: w * 0.9, height: w * 0.9)
-                        .blur(radius: 70)
-                        .position(x: w * spots[i].0, y: h * spots[i].1)
-                }
-            }
-        }
-        .ignoresSafeArea()
-        .allowsHitTesting(false)
-    }
-}
-
-/// Cores do sistema para o nível de bateria.
+/// Cores do sistema para o nível de bateria (a cor só reforça; o valor está sempre escrito).
 func batteryColor(_ pct: Int?) -> Color {
     guard let pct else { return .secondary }
     return pct <= 20 ? .red : pct <= 40 ? .orange : .green
+}
+
+/// Fundo dos módulos dentro do painel, como os do Centro de Controlo.
+struct ModuleBackground: View {
+    @Environment(\.colorSchemeContrast) private var contrast
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 14, style: .continuous)
+            .fill(Color.primary.opacity(contrast == .increased ? 0.12 : 0.06))
+            .overlay {
+                if contrast == .increased {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .strokeBorder(Color.primary.opacity(0.35), lineWidth: 1)
+                }
+            }
+    }
+}
+
+/// Linha de menu: ocupa a largura toda e realça ao passar o ponteiro, como num menu do macOS.
+struct MenuRowStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        MenuRow(configuration: configuration)
+    }
+
+    private struct MenuRow: View {
+        let configuration: ButtonStyleConfiguration
+        @State private var hovering = false
+        @Environment(\.isEnabled) private var enabled
+
+        var body: some View {
+            configuration.label
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .contentShape(Rectangle())
+                .foregroundStyle(enabled ? Color.primary : Color.secondary)
+                .background(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(Color.primary.opacity(configuration.isPressed ? 0.16 : hovering && enabled ? 0.09 : 0))
+                )
+                .onHover { hovering = $0 }
+        }
+    }
 }

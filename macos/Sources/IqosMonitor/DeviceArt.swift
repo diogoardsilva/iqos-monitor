@@ -199,17 +199,18 @@ struct ArtPainter {
     }
 }
 
-/// Miniatura estática do aparelho, para o cabeçalho de cada cartão.
-struct DeviceThumbnail: View {
+/// Desenho estático de uma peça, à altura dada (para o centro dos anéis).
+struct DeviceGlyph: View {
+    var kind: ArtKind
     var model: Model
-    var height: CGFloat = 54
+    var height: CGFloat
 
     var body: some View {
+        let vb = ArtPainter.viewBox[kind]!
         Canvas { ctx, size in
-            let kind: ArtKind = model.onePiece ? .one : .charger
             ArtPainter.draw(ctx, kind, model, xCenter: size.width / 2, top: 0, height: size.height)
         }
-        .frame(width: height * (model.onePiece ? 64.0 / 246 : 100.0 / 214), height: height)
+        .frame(width: height * vb.width / vb.height, height: height)
         .accessibilityHidden(true)
     }
 }
